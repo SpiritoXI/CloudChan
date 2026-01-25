@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="CloudChan - 白色水晶风格 Web3 个人网盘，支持大文件上传和 IPFS 存储">
+    <meta name="theme-color" content="#FFFFFF">
+    <meta name="robots" content="index, follow">
+    <title>CloudChan 💎 Web3 个人网盘 (V2.2.1)</title>
+
+    <!-- Cache Control -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+
+    <!-- Preconnect -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com">
+
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Stylesheets -->
+    <link rel="stylesheet" href="style.css?v=2.2.1">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" crossorigin="anonymous">
+</head>
+<body>
+    <!-- Decorative Elements -->
+    <div class="element-decoration anemo" aria-hidden="true">⚡</div>
+    <div class="element-decoration electro" aria-hidden="true">💫</div>
+    <div class="element-decoration hydro" aria-hidden="true">💎</div>
+
+    <!-- Main Container -->
+    <main class="container">
+        <!-- Header -->
+        <header class="glass-card" role="banner">
+            <div class="logo">
+                <span aria-hidden="true">✨</span> CloudChan ⚡ <span class="version-badge">(V2.2.1)</span>
+            </div>
+            <div class="header-actions">
+                <!-- Search Bar -->
+                <div class="search-container">
+                    <input type="text" id="searchInput" placeholder="搜索文件..." aria-label="搜索文件">
+                    <button type="button" id="searchBtn" title="搜索文件">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                    </button>
+                    <button type="button" id="clearSearchBtn" title="清除搜索" hidden>
+                        <i class="fa-solid fa-times"></i>
+                    </button>
+                </div>
+                
+                <nav aria-label="主导航">
+                    <span class="menu-item active" aria-current="page">📁 文件</span>
+                    <button type="button" class="btn-refresh" onclick="location.reload(true)" title="强制刷新页面">
+                        <i class="fa-solid fa-sync" aria-hidden="true"></i> 刷新
+                    </button>
+                    <a href="/clear-cache.html" class="btn-clear" title="清除缓存">
+                        <i class="fa-solid fa-trash" aria-hidden="true"></i> 清理
+                    </a>
+                </nav>
+            </div>
+        </header>
+
+        <!-- File List Section -->
+        <section class="file-list-section glass-card" aria-labelledby="files-heading">
+            <div class="files-toolbar" role="region" aria-label="文件管理工具栏">
+                <div class="files-toolbar-left">
+                    <h2 id="files-heading" class="files-title">文件管理</h2>
+                    <span class="upload-limit">最大 <span id="maxUploadSizeText">1GB</span></span>
+                    <input type="file" id="fileInput" multiple hidden aria-label="选择要上传的文件">
+                    <button type="button" id="uploadBtnPrimary" class="btn btn-primary btn-upload-primary" aria-label="选择文件上传">
+                        <i class="fa-solid fa-cloud-arrow-up" aria-hidden="true"></i> 上传
+                    </button>
+                    <div class="view-toggle" role="group" aria-label="视图切换">
+                        <button type="button" id="viewListBtn" class="view-toggle-btn active" data-view="list" aria-pressed="true" title="列表视图">
+                            <i class="fa-solid fa-list" aria-hidden="true"></i>
+                        </button>
+                        <button type="button" id="viewGridBtn" class="view-toggle-btn" data-view="grid" aria-pressed="false" title="网格视图">
+                            <i class="fa-solid fa-grip" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="files-toolbar-right">
+                    <button type="button" id="newFolderBtn" class="btn-icon" aria-label="创建新文件夹" title="创建新文件夹">
+                        <i class="fa-solid fa-folder-plus" aria-hidden="true"></i> 新建文件夹
+                    </button>
+                    <button type="button" id="refreshBtn" class="btn-icon" aria-label="刷新文件列表" title="刷新列表">
+                        <i class="fa-solid fa-rotate" aria-hidden="true"></i> 刷新
+                    </button>
+                </div>
+            </div>
+
+            <div class="files-upload-progress">
+                <div id="upload-status-box" class="upload-status-box" role="status" aria-live="polite" hidden>
+                    <p class="file-info-text">
+                        文件: <strong id="file-name"></strong>
+                    </p>
+                    <div class="progress-container" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                        <div class="progress-bar" id="progress-bar"></div>
+                    </div>
+                    <div class="upload-meta">
+                        <span id="status-text" aria-live="polite">准备上传...</span>
+                        <span id="percent-text">0%</span>
+                    </div>
+                </div>
+                <button type="button" id="startBtn" class="btn btn-primary btn-start-upload" hidden aria-label="开始上传文件">
+                    <i class="fa-solid fa-rocket" aria-hidden="true"></i> 开始上传
+                </button>
+            </div>
+
+            <div class="files-layout">
+                <aside class="folder-sidebar" aria-label="文件夹">
+                    <div class="folder-list-container">
+                        <div class="folder-list" id="folderList">
+                            <!-- 文件夹列表将通过JavaScript动态生成 -->
+                        </div>
+                    </div>
+                </aside>
+
+                <div class="files-content" id="fileDropZone" aria-label="文件列表">
+
+            <!-- Batch Operations Bar -->
+            <div class="batch-operations-bar">
+                <button type="button" id="selectAllBtn" class="btn-small" title="全选文件">
+                    <i class="fa-solid fa-check-square"></i> 全选
+                </button>
+                <button type="button" id="clearSelectionBtn" class="btn-small" title="取消选择">
+                    <i class="fa-solid fa-square"></i> 取消
+                </button>
+                <button type="button" id="batchDeleteBtn" class="btn-small btn-danger" disabled title="批量删除文件">
+                    <i class="fa-solid fa-trash"></i> 批量删除 (0)
+                </button>
+                <button type="button" id="batchMoveBtn" class="btn-small btn-primary" disabled title="批量移动文件">
+                    <i class="fa-solid fa-arrow-right-arrow-left"></i> 批量移动 (0)
+                </button>
+            </div>
+
+                    <div class="table-container">
+                    <div class="files-view files-view-list" id="filesListView">
+                        <table class="file-table" role="grid" aria-describedby="files-heading">
+                            <thead>
+                                <tr>
+                                    <th scope="col"><input type="checkbox" id="selectAllCheckbox"></th>
+                                    <th scope="col">文件名</th>
+                                    <th scope="col">大小</th>
+                                    <th scope="col">日期</th>
+                                    <th scope="col" style="text-align: right;">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="fileTableBody">
+                                <tr>
+                                    <td colspan="5" class="loading-row">
+                                        <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i> 正在加载云端文件...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="files-view files-view-grid" id="filesGridView" hidden>
+                        <div id="fileGrid" class="file-grid" role="grid" aria-label="文件网格"></div>
+                    </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Version Info -->
+            <div class="version-info">
+                <div id="version-info">
+                    <i class="fa-solid fa-info-circle" aria-hidden="true"></i> 版本检查中...
+                </div>
+                <div id="cache-status"></div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Toast Notifications -->
+    <div id="toast-container" role="log" aria-live="polite" aria-atomic="true"></div>
+
+    <!-- Application Scripts -->
+    <script type="module" src="./app.js?v=2.2.1"></script>
+</body>
+</html>

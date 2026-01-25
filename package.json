@@ -1,0 +1,14 @@
+{
+  "name": "cloudchan",
+  "version": "2.2.0",
+  "private": true,
+  "scripts": {
+    "compress:assets": "node build-assets.js",
+    "compress:assets:restore": "node build-assets.js --restore"
+  },
+  "devDependencies": {
+    "cssnano": "^7.1.2",
+    "postcss": "^8.5.6",
+    "terser": "^5.46.0"
+  }
+}

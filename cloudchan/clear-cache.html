@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>清除 CloudChan 缓存</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            color: #333;
+            padding: 40px;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 500px;
+            width: 90%;
+        }
+        h1 {
+            margin-top: 0;
+            color: #667eea;
+        }
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 8px;
+            transition: transform 0.2s;
+        }
+        button:hover {
+            transform: scale(1.05);
+        }
+        .status {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 8px;
+            background: #f0f0f0;
+            display: none;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧹 清除 CloudChan 缓存</h1>
+        <p>如果网关测试缓存不生效，请点击下方按钮清除所有缓存。</p>
+
+        <button onclick="clearAllCaches()">清除所有缓存</button>
+        <button onclick="window.location.href='index.html'" style="background: #28a745;">返回 CloudChan</button>
+
+        <div id="status" class="status"></div>
+    </div>
+
+    <script>
+        function clearAllCaches() {
+            const status = document.getElementById('status');
+            status.style.display = 'block';
+
+            // 1. 清除 localStorage
+            localStorage.clear();
+            console.log('✅ localStorage 已清除');
+
+            // 2. 清除 sessionStorage
+            sessionStorage.clear();
+            console.log('✅ sessionStorage 已清除');
+
+            // 3. 清除 Service Worker
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.getRegistrations().then(registrations => {
+                    for (let registration of registrations) {
+                        registration.unregister();
+                        console.log('✅ Service Worker 已注销:', registration);
+                    }
+                });
+            }
+
+            // 4. 清除 Cache Storage
+            if ('caches' in window) {
+                caches.keys().then(cacheNames => {
+                    return Promise.all(
+                        cacheNames.map(cacheName => {
+                            return caches.delete(cacheName);
+                        })
+                    );
+                }).then(() => {
+                    console.log('✅ 所有 Cache Storage 已清除');
+                });
+            }
+
+            status.className = 'status success';
+            status.textContent = '✅ 所有缓存已清除！现在可以关闭此页面，然后重新打开 CloudChan。';
+        }
+    </script>
+</body>
+</html>

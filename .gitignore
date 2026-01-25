@@ -1,0 +1,78 @@
+# 依赖目录
+node_modules/
+
+# 系统文件
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Cloudflare 开发临时文件
+.wrangler/
+.cargo/
+.dev.vars
+
+# 构建输出
+dist/
+build/
+out/
+
+# 日志
+*.log
+npm-debug.log*
+*.log.*
+logs/
+
+# 环境变量文件（包含敏感信息）
+.env
+.env.local
+.env.*.local
+
+# JS/TS bundlers & build outputs
+.next
+.nuxt
+.turbo
+.vercel
+.parcel-cache
+.cache
+coverage
+storybook-static
+
+# Package manager artifacts
+.pnp*
+.npm
+
+# Python tooling
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+__pycache__/
+*.pyc
+
+# Go tooling
+bin/
+*.test
+*.o
+*.a
+/vendor
+*.egg-info/
+
+# Editor / IDE
+.vscode/
+.idea/
+*.iml
+*.swp
+
+# 临时测试文件
+test-*.html
+test-*.js
+
+# 备份文件
+*.bak
+*.backup
+
+# 其他临时文件
+__cc_build.txt
+.trae/
+

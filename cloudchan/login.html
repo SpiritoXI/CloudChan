@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="CloudChan - 白色水晶风格 Web3 个人网盘">
+    <meta name="theme-color" content="#FFFFFF">
+    <title>CloudChan 💎 登录</title>
+
+    <!-- Preconnect -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com">
+
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Stylesheets -->
+    <link rel="stylesheet" href="style.css?v=2.2.0">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" crossorigin="anonymous">
+</head>
+<body>
+    <!-- Decorative Elements -->
+    <div class="element-decoration anemo" aria-hidden="true">⚡</div>
+    <div class="element-decoration electro" aria-hidden="true">💫</div>
+    <div class="element-decoration hydro" aria-hidden="true">💎</div>
+
+    <!-- Login Container -->
+    <main class="login-container">
+        <div class="login-box glass-effect">
+            <!-- Logo & Title -->
+            <div class="login-header">
+                <div class="login-logo">
+                    <span class="logo-icon">✨</span>
+                    <h1>CloudChan</h1>
+                    <span class="logo-badge">💎</span>
+                </div>
+                <p class="login-subtitle">白色水晶风格 Web3 个人网盘</p>
+            </div>
+
+            <!-- Login Form -->
+            <form id="loginForm" class="login-form">
+                <input type="text" name="username" autocomplete="username" tabindex="-1" aria-hidden="true" style="position:absolute; left:-9999px; width:1px; height:1px;">
+                <div class="form-group">
+                    <label for="password">
+                        <i class="fa-solid fa-lock"></i>
+                        管理员密码
+                    </label>
+                    <div class="input-wrapper">
+                        <input 
+                            type="password" 
+                            id="password" 
+                            name="password" 
+                            placeholder="请输入 Cloudflare 环境密码"
+                            autocomplete="current-password"
+                            required
+                        >
+                        <button type="button" id="togglePassword" class="toggle-password" title="显示/隐藏密码">
+                            <i class="fa-solid fa-eye"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn-primary btn-login" id="loginBtn">
+                    <i class="fa-solid fa-rocket"></i>
+                    登录
+                </button>
+
+                <div class="login-tips">
+                    <p><i class="fa-solid fa-info-circle"></i> 提示：密码在 Cloudflare Pages 的环境变量中配置</p>
+                </div>
+            </form>
+
+            <!-- Version Info -->
+            <div class="login-footer">
+                <span class="version-text">版本 V2.2.0</span>
+            </div>
+        </div>
+
+        <!-- Features -->
+        <div class="features-section">
+            <div class="feature-card glass-effect">
+                <div class="feature-icon">⚡</div>
+                <h3>极速上传</h3>
+                <p>IPFS 分布式存储，快速高效</p>
+            </div>
+            <div class="feature-card glass-effect">
+                <div class="feature-icon">💎</div>
+                <h3>白色水晶</h3>
+                <p>纯净美学设计，玻璃拟态</p>
+            </div>
+            <div class="feature-card glass-effect">
+                <div class="feature-icon">🔒</div>
+                <h3>安全可靠</h3>
+                <p>数据加密，隐私保护</p>
+            </div>
+        </div>
+    </main>
+
+    <!-- Toast Container -->
+    <div id="toast-container" role="log" aria-live="polite" aria-atomic="true"></div>
+
+    <!-- Scripts -->
+    <script type="module">
+        import { CONFIG } from './config.js';
+
+        const togglePassword = document.getElementById('togglePassword');
+        const passwordInput = document.getElementById('password');
+        const icon = togglePassword.querySelector('i');
+        const loginForm = document.getElementById('loginForm');
+        const loginBtn = document.getElementById('loginBtn');
+        const versionText = document.querySelector('.version-text');
+
+        if (versionText) {
+            versionText.textContent = `版本 V${CONFIG.APP.VERSION}`;
+        }
+
+        togglePassword.addEventListener('click', () => {
+            const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+            passwordInput.setAttribute('type', type);
+            icon.className = type === 'password' ? 'fa-solid fa-eye' : 'fa-solid fa-eye-slash';
+        });
+
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const password = passwordInput.value.trim();
+            if (!password) {
+                showToast('请输入密码', 'error');
+                return;
+            }
+
+            loginBtn.disabled = true;
+            loginBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 登录中...';
+
+            try {
+                const res = await fetch(`${CONFIG.API_DB_PROXY}?action=load_files`, {
+                    method: 'GET',
+                    headers: {
+                        'x-auth-token': password,
+                        'Cache-Control': 'no-cache'
+                    }
+                });
+
+                if (res.status === 401) {
+                    throw new Error('密码错误');
+                }
+                if (!res.ok) {
+                    throw new Error(`服务不可用（HTTP ${res.status}）`);
+                }
+
+                const contentType = res.headers.get('content-type') || '';
+                if (!contentType.includes('application/json')) {
+                    throw new Error('后端 Functions 未生效：/api 返回了 HTML（请检查 Pages 的 Root directory/Build output directory，并重试部署）');
+                }
+
+                const json = await res.json().catch(() => ({}));
+                if (!json || json.success !== true) {
+                    throw new Error(json?.error || '验证失败');
+                }
+
+                localStorage.setItem('cc_pwd', password);
+                showToast('登录成功，正在跳转...', 'success');
+                setTimeout(() => {
+                    window.location.href = 'index.html';
+                }, 800);
+            } catch (error) {
+                localStorage.removeItem('cc_pwd');
+                showToast('登录失败：' + error.message, 'error');
+                loginBtn.disabled = false;
+                loginBtn.innerHTML = '<i class="fa-solid fa-rocket"></i> 登录';
+            }
+        });
+
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+    </script>
+</body>
+</html>
