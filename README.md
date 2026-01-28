@@ -4,7 +4,7 @@
 ![Platform](https://img.shields.io/badge/platform-Cloudflare_Pages-orange)
 ![Storage](https://img.shields.io/badge/storage-Crust_Network-green)
 ![Security](https://img.shields.io/badge/security-Enterprise%20Level-green)
-![Version](https://img.shields.io/badge/version-v2.2.1-purple)
+![Version](https://img.shields.io/badge/version-v2.2.2-purple)
 
 **CloudChan** 是一个极简主义的无服务器（Serverless）Web3 个人网盘解决方案。
 它采用 **Hybrid 直连架构**：利用 Cloudflare Functions 作为安全发卡中心，前端获取授权后 **直连 Crust Network 官方网关** 进行高速上传。
@@ -24,7 +24,7 @@
 
 ### 方式二：快速体验
 
-**当前版本**: v2.2.1（2026-01-22）
+**当前版本**: v2.2.2（2026-01-22）
 
 **最新特性**:
 - ✨ 全新 UI 设计，现代化 Glassmorphism 风格
@@ -43,6 +43,10 @@
 - 📂 **树状文件夹结构**：支持嵌套文件夹的可视化管理
 - 🧠 **长文件名友好**：列表支持两行显示，点击可展开/收起
 - ✏️ **重命名更安全**：默认隐藏后缀编辑，可一键显示/编辑后缀
+- 📥 **批量 CID 导入**：支持单个和批量导入 CID，自动验证格式
+- 📋 **一键复制 CID**：在文件列表中快速复制文件的 CID
+- 🔗 **一键分享**：生成分享链接，可设置有效期（1-365天）
+- 🎯 **独立分享页面**：白色水晶风格分享页面，支持下载和复制 CID
 
 ### 方式三：快速部署步骤（根站点模式）
 
@@ -150,6 +154,10 @@
 - 📄 **分页加载**：支持分页查看文件列表，提高大量文件下的性能
 - 📜 **懒加载**：文件列表滚动到接近底部时自动加载下一页
 - 📂 **树状文件夹结构**：支持嵌套文件夹的可视化管理
+- 📥 **批量 CID 导入**：支持单个和批量导入 CID，自动验证格式和去重
+- 📋 **一键复制 CID**：在文件列表中快速复制文件的 CID
+- 🔗 **一键分享**：生成分享链接，可设置有效期（1-365天）
+- 🎯 **独立分享页面**：白色水晶风格分享页面，支持下载和复制 CID
 
 ## 🔧 技术栈
 

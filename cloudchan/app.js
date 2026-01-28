@@ -3315,6 +3315,417 @@ const App = {
         setTimeout(() => {
             App.checkFileVerificationStatus();
         }, 5000);
+    },
+
+    /**
+     * 验证 CID 格式
+     */
+    validateCid: (cid) => {
+        if (!cid || typeof cid !== 'string') {
+            return { valid: false, error: 'CID 不能为空' };
+        }
+
+        const cleanCid = cid.trim().replace(/^ipfs:\/\//i, '');
+        const v0Pattern = /^Qm[a-zA-Z0-9]{44}$/;
+        const v1Pattern = /^b[a-zA-Z0-9]{58}$/;
+        const genericPattern = /^[a-zA-Z0-9]{44,59}$/;
+
+        if (!v0Pattern.test(cleanCid) && !v1Pattern.test(cleanCid) && !genericPattern.test(cleanCid)) {
+            return { valid: false, error: 'CID 格式不正确' };
+        }
+
+        return { valid: true, cid: cleanCid };
+    },
+
+    /**
+     * 从 IPFS 网关获取文件名
+     */
+    fetchCidFileName: async (cid) => {
+        const gateways = [
+            'https://ipfs.io/ipfs/',
+            'https://cloudflare-ipfs.com/ipfs/',
+            'https://dweb.link/ipfs/',
+            'https://cf-ipfs.com/ipfs/'
+        ];
+
+        for (const gateway of gateways) {
+            try {
+                const url = `${gateway}${cid}`;
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+                const response = await fetch(url, {
+                    method: 'HEAD',
+                    signal: controller.signal
+                });
+
+                clearTimeout(timeoutId);
+
+                if (response.ok) {
+                    const contentDisposition = response.headers.get('Content-Disposition');
+                    if (contentDisposition) {
+                        const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+                        if (filenameMatch && filenameMatch[1]) {
+                            const filename = filenameMatch[1].replace(/['"]/g, '');
+                            if (filename && filename !== 'download') {
+                                return filename;
+                            }
+                        }
+                    }
+
+                    const urlObj = new URL(url);
+                    const pathname = urlObj.pathname;
+                    const pathParts = pathname.split('/');
+                    if (pathParts.length > 1) {
+                        const potentialName = pathParts[pathParts.length - 1];
+                        if (potentialName && potentialName !== cid) {
+                            return potentialName;
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn(`网关 ${gateway} 获取文件名失败:`, e);
+                continue;
+            }
+        }
+
+        return `ipfs-${cid.substring(0, 8)}...`;
+    },
+
+    /**
+     * 获取文件大小（通过 HEAD 请求）
+     */
+    fetchCidFileSize: async (cid) => {
+        const gateways = [
+            'https://ipfs.io/ipfs/',
+            'https://cloudflare-ipfs.com/ipfs/',
+            'https://dweb.link/ipfs/'
+        ];
+
+        for (const gateway of gateways) {
+            try {
+                const url = `${gateway}${cid}`;
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+                const response = await fetch(url, {
+                    method: 'HEAD',
+                    signal: controller.signal
+                });
+
+                clearTimeout(timeoutId);
+
+                if (response.ok) {
+                    const contentLength = response.headers.get('Content-Length');
+                    if (contentLength) {
+                        return parseInt(contentLength, 10);
+                    }
+                }
+            } catch (e) {
+                console.warn(`网关 ${gateway} 获取文件大小失败:`, e);
+                continue;
+            }
+        }
+
+        return 0;
+    },
+
+    /**
+     * 添加 CID 文件到列表
+     */
+    addCidFile: async (cid, fileName = '', fileSize = 0) => {
+        const pwd = localStorage.getItem('cc_pwd');
+        if (!pwd) {
+            UI.toast('请先登录', 'error');
+            return;
+        }
+
+        const validation = App.validateCid(cid);
+        if (!validation.valid) {
+            UI.toast(validation.error, 'error');
+            return;
+        }
+
+        const cleanCid = validation.cid;
+
+        const existingFile = App.allFiles.find(f => f.cid === cleanCid);
+        if (existingFile) {
+            UI.toast('该 CID 已存在于文件列表中', 'error');
+            return;
+        }
+
+        UI.toast('正在添加文件...', 'info');
+
+        try {
+            let finalFileName = fileName.trim();
+            if (!finalFileName) {
+                UI.toast('正在获取文件信息...', 'info');
+                finalFileName = await App.fetchCidFileName(cleanCid);
+            }
+
+            let finalFileSize = fileSize;
+            if (finalFileSize === 0) {
+                finalFileSize = await App.fetchCidFileSize(cleanCid);
+            }
+
+            const fileData = {
+                id: Date.now(),
+                cid: cleanCid,
+                name: finalFileName,
+                size: finalFileSize,
+                uploadedAt: Date.now(),
+                verified: true,
+                verify_status: 'ok',
+                folder_id: App.selectedFolder || 'default'
+            };
+
+            const res = await App.secureFetch(CONFIG.API_DB_PROXY, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-auth-token': pwd
+                },
+                body: JSON.stringify({
+                    action: 'add_file',
+                    file: fileData
+                })
+            });
+
+            if (!res.ok) {
+                const message = await App.readErrorMessage(res);
+                throw new Error(message || '添加文件失败');
+            }
+
+            const json = await res.json();
+            if (!json.success) {
+                throw new Error(json.error || '添加文件失败');
+            }
+
+            UI.toast(`成功添加文件: ${finalFileName}`, 'success');
+            await App.loadFiles();
+
+            return true;
+        } catch (e) {
+            console.error('添加 CID 文件失败:', e);
+            UI.toast(`添加失败: ${e.message}`, 'error');
+            return false;
+        }
+    },
+
+    /**
+     * 批量导入 CID
+     */
+    batchImportCids: async (cidList, autoFetchInfo = true) => {
+        const pwd = localStorage.getItem('cc_pwd');
+        if (!pwd) {
+            UI.toast('请先登录', 'error');
+            return;
+        }
+
+        if (!cidList || cidList.length === 0) {
+            UI.toast('没有有效的 CID', 'error');
+            return;
+        }
+
+        UI.toast(`开始导入 ${cidList.length} 个文件...`, 'info');
+
+        let successCount = 0;
+        let failCount = 0;
+        let duplicateCount = 0;
+
+        for (const cid of cidList) {
+            try {
+                const validation = App.validateCid(cid);
+                if (!validation.valid) {
+                    failCount++;
+                    continue;
+                }
+
+                const cleanCid = validation.cid;
+
+                const existingFile = App.allFiles.find(f => f.cid === cleanCid);
+                if (existingFile) {
+                    duplicateCount++;
+                    continue;
+                }
+
+                let finalFileName = '';
+                let finalFileSize = 0;
+
+                if (autoFetchInfo) {
+                    try {
+                        finalFileName = await App.fetchCidFileName(cleanCid);
+                        finalFileSize = await App.fetchCidFileSize(cleanCid);
+                    } catch (e) {
+                        console.warn(`获取 ${cleanCid} 信息失败:`, e);
+                        finalFileName = `ipfs-${cleanCid.substring(0, 8)}...`;
+                    }
+                }
+
+                const fileData = {
+                    id: Date.now() + Math.random(),
+                    cid: cleanCid,
+                    name: finalFileName || `ipfs-${cleanCid.substring(0, 8)}...`,
+                    size: finalFileSize,
+                    uploadedAt: Date.now(),
+                    verified: true,
+                    verify_status: 'ok',
+                    folder_id: App.selectedFolder || 'default'
+                };
+
+                const res = await App.secureFetch(CONFIG.API_DB_PROXY, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-auth-token': pwd
+                    },
+                    body: JSON.stringify({
+                        action: 'add_file',
+                        file: fileData
+                    })
+                });
+
+                if (!res.ok) {
+                    failCount++;
+                    continue;
+                }
+
+                const json = await res.json();
+                if (json.success) {
+                    successCount++;
+                } else {
+                    failCount++;
+                }
+
+                // 添加延迟，避免请求过快
+                await new Promise(resolve => setTimeout(resolve, 100));
+
+            } catch (e) {
+                console.error(`导入 ${cid} 失败:`, e);
+                failCount++;
+            }
+        }
+
+        await App.loadFiles();
+
+        const message = `导入完成！成功: ${successCount}, 失败: ${failCount}, 重复: ${duplicateCount}`;
+        UI.toast(message, successCount > 0 ? 'success' : 'error');
+
+        return { successCount, failCount, duplicateCount };
+    },
+
+    /**
+     * 复制 CID 到剪贴板
+     */
+    copyCidToClipboard: async (cid, fileName = '') => {
+        try {
+            await navigator.clipboard.writeText(cid);
+            const msg = fileName ? `已复制 ${fileName} 的 CID` : 'CID 已复制到剪贴板';
+            UI.toast(msg, 'success');
+            return true;
+        } catch (e) {
+            console.error('复制失败:', e);
+            
+            // 降级方案：使用传统方法
+            const textArea = document.createElement('textarea');
+            textArea.value = cid;
+            textArea.style.position = 'fixed';
+            textArea.style.opacity = '0';
+            document.body.appendChild(textArea);
+            textArea.select();
+            
+            try {
+                document.execCommand('copy');
+                UI.toast('CID 已复制到剪贴板', 'success');
+                document.body.removeChild(textArea);
+                return true;
+            } catch (e) {
+                document.body.removeChild(textArea);
+                UI.toast('复制失败，请手动复制', 'error');
+                return false;
+            }
+        }
+    },
+
+    /**
+     * 生成分享链接
+     */
+    generateShareLink: async (fileId, duration = 7) => {
+        const pwd = localStorage.getItem('cc_pwd');
+        if (!pwd) {
+            UI.toast('请先登录', 'error');
+            return null;
+        }
+
+        try {
+            UI.toast('正在生成分享链接...', 'info');
+
+            const res = await App.secureFetch(`${CONFIG.API_DB_PROXY}?action=create_share`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-auth-token': pwd
+                },
+                body: JSON.stringify({
+                    fileId: fileId,
+                    duration: duration * 24 * 60 * 60 * 1000 // 转换为毫秒
+                })
+            });
+
+            if (!res.ok) {
+                const message = await App.readErrorMessage(res);
+                throw new Error(message || '生成分享链接失败');
+            }
+
+            const json = await res.json();
+            if (!json.success) {
+                throw new Error(json.error || '生成分享链接失败');
+            }
+
+            const shareLink = `${window.location.origin}/share.html?id=${json.shareId}`;
+            
+            // 复制到剪贴板
+            await navigator.clipboard.writeText(shareLink);
+            
+            UI.toast('分享链接已生成并复制到剪贴板', 'success');
+            
+            return shareLink;
+        } catch (e) {
+            console.error('生成分享链接失败:', e);
+            UI.toast(`生成分享链接失败: ${e.message}`, 'error');
+            return null;
+        }
+    },
+
+    /**
+     * 获取分享统计信息
+     */
+    getShareStats: async (shareId) => {
+        const pwd = localStorage.getItem('cc_pwd');
+        if (!pwd) {
+            return null;
+        }
+
+        try {
+            const res = await App.secureFetch(`${CONFIG.API_DB_PROXY}?action=get_share_stats&shareId=${shareId}`, {
+                method: 'GET',
+                headers: { 'x-auth-token': pwd }
+            });
+
+            if (!res.ok) {
+                return null;
+            }
+
+            const json = await res.json();
+            if (json.success) {
+                return json.data;
+            }
+            
+            return null;
+        } catch (e) {
+            console.error('获取分享统计失败:', e);
+            return null;
+        }
     }
 };
 

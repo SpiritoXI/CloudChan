@@ -72,6 +72,9 @@
                     <button type="button" id="uploadBtnPrimary" class="btn btn-primary btn-upload-primary" aria-label="选择文件上传">
                         <i class="fa-solid fa-cloud-arrow-up" aria-hidden="true"></i> 上传
                     </button>
+                    <button type="button" id="addCidBtn" class="btn btn-secondary btn-add-cid" aria-label="添加CID" title="添加已有IPFS文件">
+                        <i class="fa-solid fa-link" aria-hidden="true"></i> 添加CID
+                    </button>
                     <div class="view-toggle" role="group" aria-label="视图切换">
                         <button type="button" id="viewListBtn" class="view-toggle-btn active" data-view="list" aria-pressed="true" title="列表视图">
                             <i class="fa-solid fa-list" aria-hidden="true"></i>
@@ -177,6 +180,113 @@
 
     <!-- Toast Notifications -->
     <div id="toast-container" role="log" aria-live="polite" aria-atomic="true"></div>
+
+    <!-- Add CID Modal -->
+    <div id="addCidModal" class="modal" role="dialog" aria-labelledby="addCidModalTitle" aria-hidden="true">
+        <div class="modal-content glass-effect">
+            <div class="modal-header">
+                <h2 id="addCidModalTitle">
+                    <i class="fa-solid fa-link"></i> 添加 IPFS 文件
+                </h2>
+                <button type="button" class="modal-close" aria-label="关闭" id="closeAddCidModal">
+                    <i class="fa-solid fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="cidInputMode">输入模式</label>
+                    <div class="input-mode-toggle">
+                        <button type="button" class="mode-btn active" data-mode="single">单个CID</button>
+                        <button type="button" class="mode-btn" data-mode="batch">批量导入</button>
+                    </div>
+                </div>
+
+                <!-- 单个 CID 输入模式 -->
+                <div id="singleCidMode" class="cid-input-mode">
+                    <div class="form-group">
+                        <label for="cidInput">IPFS CID</label>
+                        <div class="input-wrapper">
+                            <input
+                                type="text"
+                                id="cidInput"
+                                placeholder="输入 IPFS CID（如：bafkreigh2akiscaildcq...）"
+                                autocomplete="off"
+                            >
+                            <button type="button" id="pasteCidBtn" class="btn-icon" title="粘贴">
+                                <i class="fa-solid fa-paste"></i>
+                            </button>
+                        </div>
+                        <small class="form-hint">支持标准 CID 和 IPFS 格式</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="fileNameInput">文件名</label>
+                        <input
+                            type="text"
+                            id="fileNameInput"
+                            placeholder="自动获取或手动输入文件名"
+                            autocomplete="off"
+                        >
+                        <small class="form-hint">留空则自动从网关获取文件名</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="fileSizeInput">文件大小（字节）</label>
+                        <input
+                            type="number"
+                            id="fileSizeInput"
+                            placeholder="0"
+                            min="0"
+                        >
+                        <small class="form-hint">留空则自动检测或设为 0</small>
+                    </div>
+                </div>
+
+                <!-- 批量 CID 导入模式 -->
+                <div id="batchCidMode" class="cid-input-mode" hidden>
+                    <div class="form-group">
+                        <label for="batchCidInput">批量 CID 列表</label>
+                        <textarea
+                            id="batchCidInput"
+                            placeholder="每行一个 CID，例如：
+bafkreigh2akiscaildcqabsyg3dfr6chu3fgpregiymsck7e7aqa4s52zy
+bafkreiex3vfx5qj7d6l3v9p8k0m4n5l6o7i8u9y0
+bafkrei..."
+                            rows="10"
+                            autocomplete="off"
+                        ></textarea>
+                        <small class="form-hint">每行输入一个 CID，支持多行批量导入</small>
+                    </div>
+                    <div class="form-group">
+                        <label>导入选项</label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="autoFetchInfo" checked>
+                            自动获取文件名和大小
+                        </label>
+                    </div>
+                    <div id="batchPreview" class="batch-preview" hidden>
+                        <div class="batch-preview-header">
+                            <span id="batchPreviewCount">0</span> 个 CID 待导入
+                        </div>
+                        <div class="batch-preview-list" id="batchPreviewList">
+                            <!-- 动态生成 -->
+                        </div>
+                    </div>
+                </div>
+
+                <div id="cidValidationStatus" class="validation-status" hidden>
+                    <i class="fa-solid fa-spinner fa-spin"></i> 正在验证 CID...
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="cancelAddCidBtn">
+                    <i class="fa-solid fa-times"></i> 取消
+                </button>
+                <button type="button" class="btn btn-primary" id="confirmAddCidBtn" disabled>
+                    <i class="fa-solid fa-plus"></i> 添加到列表
+                </button>
+            </div>
+        </div>
+        <div class="modal-backdrop" id="addCidModalBackdrop"></div>
+    </div>
 
     <!-- Application Scripts -->
     <script type="module" src="./app.js?v=2.2.1"></script>

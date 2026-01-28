@@ -1845,6 +1845,477 @@ async function testAllGateways(gateways, testCid = CONFIG.TEST_CID, forceRefresh
     });
 
     return results;
+},
+
+/**
+ * 打开添加 CID 模态框
+ */
+openAddCidModal: () => {
+    const modal = document.getElementById('addCidModal');
+    const backdrop = document.getElementById('addCidModalBackdrop');
+
+    if (!modal || !backdrop) {
+        UI.toast('模态框元素未找到', 'error');
+        return;
+    }
+
+    // 清空表单
+    const cidInput = document.getElementById('cidInput');
+    const fileNameInput = document.getElementById('fileNameInput');
+    const fileSizeInput = document.getElementById('fileSizeInput');
+    const batchCidInput = document.getElementById('batchCidInput');
+    const validationStatus = document.getElementById('cidValidationStatus');
+    const confirmBtn = document.getElementById('confirmAddCidBtn');
+    const batchPreview = document.getElementById('batchPreview');
+
+    if (cidInput) cidInput.value = '';
+    if (fileNameInput) fileNameInput.value = '';
+    if (fileSizeInput) fileSizeInput.value = '';
+    if (batchCidInput) batchCidInput.value = '';
+    if (validationStatus) validationStatus.hidden = true;
+    if (confirmBtn) confirmBtn.disabled = true;
+    if (batchPreview) batchPreview.hidden = true;
+
+    // 显示模态框
+    modal.classList.remove('hidden');
+    modal.setAttribute('aria-hidden', 'false');
+
+    setTimeout(() => {
+        if (cidInput) cidInput.focus();
+    }, 100);
+
+    UI.bindAddCidModalEvents();
+},
+
+/**
+ * 关闭添加 CID 模态框
+ */
+closeAddCidModal: () => {
+    const modal = document.getElementById('addCidModal');
+    if (modal) {
+        modal.classList.add('hidden');
+        modal.setAttribute('aria-hidden', 'true');
+    }
+},
+
+/**
+ * 绑定添加 CID 模态框的事件监听器
+ */
+bindAddCidModalEvents: () => {
+    const closeBtn = document.getElementById('closeAddCidModal');
+    const cancelBtn = document.getElementById('cancelAddCidBtn');
+    const backdrop = document.getElementById('addCidModalBackdrop');
+    const confirmBtn = document.getElementById('confirmAddCidBtn');
+    const pasteBtn = document.getElementById('pasteCidBtn');
+    const cidInput = document.getElementById('cidInput');
+    const batchCidInput = document.getElementById('batchCidInput');
+    const validationStatus = document.getElementById('cidValidationStatus');
+    const autoFetchInfo = document.getElementById('autoFetchInfo');
+    const modeBtns = document.querySelectorAll('.mode-btn');
+
+    // 克隆节点以避免重复绑定
+    const newCloseBtn = closeBtn?.cloneNode(true);
+    const newCancelBtn = cancelBtn?.cloneNode(true);
+    const newBackdrop = backdrop?.cloneNode(true);
+    const newConfirmBtn = confirmBtn?.cloneNode(true);
+    const newPasteBtn = pasteBtn?.cloneNode(true);
+    const newCidInput = cidInput?.cloneNode(true);
+    const newBatchCidInput = batchCidInput?.cloneNode(true);
+    const newAutoFetchInfo = autoFetchInfo?.cloneNode(true);
+
+    if (closeBtn) closeBtn.parentNode.replaceChild(newCloseBtn, closeBtn);
+    if (cancelBtn) cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
+    if (backdrop) backdrop.parentNode.replaceChild(newBackdrop, backdrop);
+    if (confirmBtn) confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+    if (pasteBtn) pasteBtn.parentNode.replaceChild(newPasteBtn, pasteBtn);
+    if (cidInput) cidInput.parentNode.replaceChild(newCidInput, cidInput);
+    if (batchCidInput) batchCidInput.parentNode.replaceChild(newBatchCidInput, batchCidInput);
+    if (autoFetchInfo) autoFetchInfo.parentNode.replaceChild(newAutoFetchInfo, autoFetchInfo);
+
+    // 关闭按钮
+    if (newCloseBtn) {
+        newCloseBtn.addEventListener('click', UI.closeAddCidModal);
+    }
+
+    // 取消按钮
+    if (newCancelBtn) {
+        newCancelBtn.addEventListener('click', UI.closeAddCidModal);
+    }
+
+    // 背景点击关闭
+    if (newBackdrop) {
+        newBackdrop.addEventListener('click', UI.closeAddCidModal);
+    }
+
+    // ESC 键关闭
+    const escHandler = (e) => {
+        if (e.key === 'Escape') {
+            UI.closeAddCidModal();
+            document.removeEventListener('keydown', escHandler);
+        }
+    };
+    document.addEventListener('keydown', escHandler);
+
+    // 模式切换
+    modeBtns.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const mode = e.target.dataset.mode;
+            UI.switchCidInputMode(mode);
+        });
+    });
+
+    // 粘贴按钮
+    if (newPasteBtn && newCidInput) {
+        newPasteBtn.addEventListener('click', async () => {
+            try {
+                const text = await navigator.clipboard.readText();
+                newCidInput.value = text;
+                UI.validateCidInput();
+                UI.toast('已粘贴', 'success');
+            } catch (e) {
+                UI.toast('无法访问剪贴板', 'error');
+            }
+        });
+    }
+
+    // CID 输入框实时验证（单个模式）
+    if (newCidInput) {
+        newCidInput.addEventListener('input', UI.validateCidInput);
+        newCidInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !newConfirmBtn.disabled) {
+                UI.submitAddCid();
+            }
+        });
+    }
+
+    // 批量输入框实时验证
+    if (newBatchCidInput) {
+        newBatchCidInput.addEventListener('input', UI.validateBatchCidInput);
+    }
+
+    // 自动获取信息复选框
+    if (newAutoFetchInfo) {
+        newAutoFetchInfo.addEventListener('change', () => {
+            if (newBatchCidInput.value.trim()) {
+                UI.validateBatchCidInput();
+            }
+        });
+    }
+
+    // 确认按钮
+    if (newConfirmBtn) {
+        newConfirmBtn.addEventListener('click', UI.submitAddCid);
+    }
+},
+
+/**
+ * 切换 CID 输入模式
+ */
+switchCidInputMode: (mode) => {
+    const singleMode = document.getElementById('singleCidMode');
+    const batchMode = document.getElementById('batchCidMode');
+    const modeBtns = document.querySelectorAll('.mode-btn');
+    const validationStatus = document.getElementById('cidValidationStatus');
+    const confirmBtn = document.getElementById('confirmAddCidBtn');
+    const batchPreview = document.getElementById('batchPreview');
+
+    // 更新按钮状态
+    modeBtns.forEach(btn => {
+        if (btn.dataset.mode === mode) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+
+    // 切换显示区域
+    if (mode === 'single') {
+        if (singleMode) singleMode.hidden = false;
+        if (batchMode) batchMode.hidden = true;
+        if (batchPreview) batchPreview.hidden = true;
+        UI.validateCidInput();
+    } else {
+        if (singleMode) singleMode.hidden = true;
+        if (batchMode) batchMode.hidden = false;
+        if (validationStatus) validationStatus.hidden = true;
+        UI.validateBatchCidInput();
+    }
+},
+
+/**
+ * 验证单个 CID 输入
+ */
+validateCidInput: async () => {
+    const cidInput = document.getElementById('cidInput');
+    const validationStatus = document.getElementById('cidValidationStatus');
+    const confirmBtn = document.getElementById('confirmAddCidBtn');
+
+    if (!cidInput) return;
+
+    const cid = cidInput.value.trim();
+
+    if (!cid) {
+        if (validationStatus) validationStatus.hidden = true;
+        if (confirmBtn) confirmBtn.disabled = true;
+        return;
+    }
+
+    if (validationStatus) {
+        validationStatus.hidden = false;
+        validationStatus.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 正在验证 CID...';
+    }
+
+    const validation = App.validateCid(cid);
+
+    if (!validation.valid) {
+        if (validationStatus) {
+            validationStatus.innerHTML = `<i class="fa-solid fa-times-circle"></i> ${validation.error}`;
+            validationStatus.style.color = '#ff6b6b';
+        }
+        if (confirmBtn) confirmBtn.disabled = true;
+        return;
+    }
+
+    const existingFile = App.allFiles.find(f => f.cid === validation.cid);
+    if (existingFile) {
+        if (validationStatus) {
+            validationStatus.innerHTML = `<i class="fa-solid fa-exclamation-triangle"></i> 该 CID 已存在于列表中`;
+            validationStatus.style.color = '#ffd93d';
+        }
+        if (confirmBtn) confirmBtn.disabled = true;
+        return;
+    }
+
+    if (validationStatus) {
+        validationStatus.innerHTML = '<i class="fa-solid fa-check-circle"></i> CID 有效';
+        validationStatus.style.color = '#6bcf7f';
+    }
+    if (confirmBtn) confirmBtn.disabled = false;
+},
+
+/**
+ * 验证批量 CID 输入
+ */
+validateBatchCidInput: async () => {
+    const batchCidInput = document.getElementById('batchCidInput');
+    const autoFetchInfo = document.getElementById('autoFetchInfo');
+    const batchPreview = document.getElementById('batchPreview');
+    const batchPreviewCount = document.getElementById('batchPreviewCount');
+    const batchPreviewList = document.getElementById('batchPreviewList');
+    const confirmBtn = document.getElementById('confirmAddCidBtn');
+
+    if (!batchCidInput) return;
+
+    const text = batchCidInput.value.trim();
+    const lines = text.split('\n').filter(line => line.trim());
+
+    if (lines.length === 0) {
+        if (batchPreview) batchPreview.hidden = true;
+        if (confirmBtn) confirmBtn.disabled = true;
+        return;
+    }
+
+    // 验证每个 CID
+    const validCids = [];
+    const invalidCids = [];
+    const duplicateCids = [];
+
+    lines.forEach(line => {
+        const cid = line.trim();
+        const validation = App.validateCid(cid);
+
+        if (!validation.valid) {
+            invalidCids.push({ cid, error: validation.error });
+        } else {
+            const existingFile = App.allFiles.find(f => f.cid === validation.cid);
+            if (existingFile) {
+                duplicateCids.push(validation.cid);
+            } else {
+                validCids.push(validation.cid);
+            }
+        }
+    });
+
+    // 显示预览
+    if (batchPreview && batchPreviewCount && batchPreviewList) {
+        batchPreview.hidden = false;
+        batchPreviewCount.textContent = validCids.length;
+
+        let previewHtml = '';
+        validCids.slice(0, 5).forEach(cid => {
+            previewHtml += `<div class="batch-preview-item">${cid.substring(0, 20)}...</div>`;
+        });
+
+        if (validCids.length > 5) {
+            previewHtml += `<div class="batch-preview-more">还有 ${validCids.length - 5} 个...</div>`;
+        }
+
+        if (invalidCids.length > 0) {
+            previewHtml += `<div class="batch-preview-error">${invalidCids.length} 个无效 CID</div>`;
+        }
+
+        if (duplicateCids.length > 0) {
+            previewHtml += `<div class="batch-preview-duplicate">${duplicateCids.length} 个重复 CID</div>`;
+        }
+
+        batchPreviewList.innerHTML = previewHtml;
+    }
+
+    // 启用/禁用确认按钮
+    if (confirmBtn) {
+        confirmBtn.disabled = validCids.length === 0;
+    }
+},
+
+/**
+ * 提交添加 CID
+ */
+submitAddCid: async () => {
+    const singleMode = document.getElementById('singleCidMode');
+    const batchMode = document.getElementById('batchCidMode');
+    const confirmBtn = document.getElementById('confirmAddCidBtn');
+
+    if (!confirmBtn) return;
+
+    confirmBtn.disabled = true;
+    confirmBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 添加中...';
+
+    try {
+        if (!singleMode?.hidden) {
+            // 单个 CID 模式
+            const cidInput = document.getElementById('cidInput');
+            const fileNameInput = document.getElementById('fileNameInput');
+            const fileSizeInput = document.getElementById('fileSizeInput');
+
+            if (!cidInput || !cidInput.value.trim()) {
+                UI.toast('请输入 CID', 'error');
+                return;
+            }
+
+            const cid = cidInput.value.trim();
+            const fileName = fileNameInput ? fileNameInput.value : '';
+            const fileSize = fileSizeInput ? parseInt(fileSizeInput.value, 10) || 0 : 0;
+
+            const success = await App.addCidFile(cid, fileName, fileSize);
+            if (success) {
+                UI.closeAddCidModal();
+            }
+        } else if (!batchMode?.hidden) {
+            // 批量导入模式
+            const batchCidInput = document.getElementById('batchCidInput');
+            const autoFetchInfo = document.getElementById('autoFetchInfo');
+
+            if (!batchCidInput || !batchCidInput.value.trim()) {
+                UI.toast('请输入 CID 列表', 'error');
+                return;
+            }
+
+            const text = batchCidInput.value.trim();
+            const lines = text.split('\n').filter(line => line.trim());
+            const validCids = lines.filter(line => {
+                const validation = App.validateCid(line.trim());
+                return validation.valid && !App.allFiles.find(f => f.cid === validation.cid);
+            });
+
+            const autoFetch = autoFetchInfo ? autoFetchInfo.checked : true;
+            const result = await App.batchImportCids(validCids, autoFetch);
+
+            if (result.successCount > 0) {
+                UI.closeAddCidModal();
+            }
+        }
+    } catch (e) {
+        UI.toast(`添加失败: ${e.message}`, 'error');
+    } finally {
+        if (confirmBtn) {
+            confirmBtn.disabled = false;
+            confirmBtn.innerHTML = '<i class="fa-solid fa-plus"></i> 添加到列表';
+        }
+    }
+},
+
+/**
+ * 复制 CID
+ */
+copyCid: async (cid, fileName) => {
+    await App.copyCidToClipboard(cid, fileName);
+},
+
+/**
+ * 分享文件
+ */
+shareFile: async (fileId) => {
+    await App.generateShareLink(fileId, 7); // 默认7天有效期
+},
+
+/**
+ * 显示分享设置对话框
+ */
+showShareSettings: async (fileId, fileName) => {
+    const duration = await UI.prompt('请设置分享时长（天）:', '7');
+    if (!duration) return;
+
+    const days = parseInt(duration, 10);
+    if (isNaN(days) || days <= 0) {
+        UI.toast('请输入有效的天数', 'error');
+        return;
+    }
+
+    await App.generateShareLink(fileId, days);
+},
+
+/**
+ * 显示提示对话框
+ */
+prompt: (message, defaultValue = '') => {
+    return new Promise((resolve) => {
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        overlay.innerHTML = `
+            <div class="modal-box glass-effect" style="width: 400px; max-width: 90%;">
+                <div style="padding: 20px;">
+                    <h3 style="margin-top: 0; margin-bottom: 15px;">设置分享时长</h3>
+                    <p style="margin-bottom: 15px;">${message}</p>
+                    <input type="number" id="promptInput" value="${defaultValue}" min="1" max="365" style="width: 100%; padding: 8px; margin-bottom: 15px; border: 1px solid #ddd; border-radius: 4px;">
+                    <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                        <button id="promptCancelBtn" class="btn btn-secondary">取消</button>
+                        <button id="promptOkBtn" class="btn btn-primary">确定</button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(overlay);
+
+        const input = overlay.querySelector('#promptInput');
+        const cancelBtn = overlay.querySelector('#promptCancelBtn');
+        const okBtn = overlay.querySelector('#promptOkBtn');
+
+        const cleanup = () => {
+            overlay.remove();
+        };
+
+        cancelBtn.addEventListener('click', () => {
+            cleanup();
+            resolve(null);
+        });
+
+        okBtn.addEventListener('click', () => {
+            const value = input.value;
+            cleanup();
+            resolve(value);
+        });
+
+        input.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                const value = input.value;
+                cleanup();
+                resolve(value);
+            }
+        });
+
+        input.focus();
+    });
 }
 
 function createToastContainer() {
