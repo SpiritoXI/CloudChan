@@ -1,0 +1,148 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
+import { FileIcon, X, CheckCircle, AlertCircle } from 'lucide-react';
+import useStore from '@/store/useStore';
+import { toast } from 'sonner';
+
+interface FileUploadProps {
+  file: File;
+  onClose: () => void;
+}
+
+export default function FileUpload({ file, onClose }: FileUploadProps) {
+  const [progress, setProgress] = useState(0);
+  const [status, setStatus] = useState<'uploading' | 'completed' | 'error'>('uploading');
+  const [error, setError] = useState<string | null>(null);
+
+  const addFile = useStore((state) => state.addFile);
+  const updateFile = useStore((state) => state.updateFile);
+
+  useEffect(() => {
+    const uploadFile = async () => {
+      const fileId = `file-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+      // 添加文件到列表
+      addFile({
+        id: fileId,
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        uploadDate: new Date().toISOString(),
+        status: 'uploading',
+        progress: 0,
+      });
+
+      // 模拟上传过程
+      try {
+        for (let i = 0; i <= 100; i += 5) {
+          await new Promise((resolve) => setTimeout(resolve, 100));
+          const newProgress = i;
+          setProgress(newProgress);
+          updateFile(fileId, { progress: newProgress });
+        }
+
+        // 上传完成
+        setStatus('completed');
+        updateFile(fileId, {
+          status: 'completed',
+          progress: 100,
+          cid: `Qm${Math.random().toString(36).substr(2, 44)}`, // 模拟 CID
+        });
+        toast.success(`${file.name} 上传成功`);
+      } catch (err) {
+        setStatus('error');
+        setError('上传失败，请重试');
+        updateFile(fileId, {
+          status: 'error',
+        });
+        toast.error(`${file.name} 上传失败`);
+      }
+    };
+
+    uploadFile();
+  }, [file, addFile, updateFile]);
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+  };
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center justify-between">
+            <span>文件上传</span>
+            <Button variant="ghost" size="icon" onClick={onClose} className="h-6 w-6">
+              <X className="h-4 w-4" />
+            </Button>
+          </DialogTitle>
+          <DialogDescription>
+            {status === 'uploading' ? '正在上传文件，请稍候...' : null}
+            {status === 'completed' ? '文件上传成功！' : null}
+            {status === 'error' ? error : null}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          {/* 文件信息 */}
+          <div className="flex items-start space-x-4 p-4 bg-muted/50 rounded-lg">
+            <div className="flex-shrink-0">
+              <FileIcon className="h-10 w-10 text-muted-foreground" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium truncate">{file.name}</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {formatFileSize(file.size)}
+              </p>
+            </div>
+            {status === 'completed' && (
+              <CheckCircle className="h-5 w-5 text-green-500 flex-shrink-0" />
+            )}
+            {status === 'error' && (
+              <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0" />
+            )}
+          </div>
+
+          {/* 上传进度 */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">上传进度</span>
+              <span className="font-medium">{progress}%</span>
+            </div>
+            <Progress value={progress} className="h-2" />
+          </div>
+
+          {/* 操作按钮 */}
+          <div className="flex justify-end gap-2">
+            {status === 'completed' && (
+              <Button onClick={onClose}>关闭</Button>
+            )}
+            {status === 'error' && (
+              <>
+                <Button variant="outline" onClick={onClose}>关闭</Button>
+                <Button onClick={onClose}>重试</Button>
+              </>
+            )}
+            {status === 'uploading' && (
+              <Button variant="outline" onClick={onClose}>取消</Button>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}

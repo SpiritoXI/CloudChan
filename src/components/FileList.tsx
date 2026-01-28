@@ -1,0 +1,180 @@
+'use client';
+
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { FileIcon, MoreVertical, CheckCircle, AlertCircle, Clock, Copy, Edit2, Trash2 } from 'lucide-react';
+import useStore from '@/store/useStore';
+import { toast } from 'sonner';
+
+interface FileListProps {
+  files: Array<{
+    id: string;
+    name: string;
+    size: number;
+    type: string;
+    uploadDate: string;
+    cid?: string;
+    status: 'uploading' | 'completed' | 'error';
+    progress?: number;
+  }>;
+}
+
+export default function FileList({ files }: FileListProps) {
+  const deleteFile = useStore((state) => state.deleteFile);
+  const updateFile = useStore((state) => state.updateFile);
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+  };
+
+  const formatDate = (dateString: string): string => {
+    const date = new Date(dateString);
+    return date.toLocaleString('zh-CN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  const handleCopyCID = (cid: string) => {
+    navigator.clipboard.writeText(cid);
+    toast.success('CID 已复制到剪贴板');
+  };
+
+  const handleDelete = (fileId: string) => {
+    deleteFile(fileId);
+    toast.success('文件记录已删除');
+  };
+
+  const getStatusIcon = (status: string, progress?: number) => {
+    switch (status) {
+      case 'completed':
+        return <CheckCircle className="h-4 w-4 text-green-500" />;
+      case 'error':
+        return <AlertCircle className="h-4 w-4 text-red-500" />;
+      case 'uploading':
+        return <Clock className="h-4 w-4 text-yellow-500" />;
+      default:
+        return null;
+    }
+  };
+
+  const getStatusBadge = (status: string, progress?: number) => {
+    switch (status) {
+      case 'completed':
+        return <Badge variant="default" className="bg-green-500">已完成</Badge>;
+      case 'error':
+        return <Badge variant="destructive">上传失败</Badge>;
+      case 'uploading':
+        return <Badge variant="outline">上传中 {progress}%</Badge>;
+      default:
+        return <Badge variant="outline">未知</Badge>;
+    }
+  };
+
+  return (
+    <div className="rounded-md border">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-[50px]"></TableHead>
+            <TableHead>文件名</TableHead>
+            <TableHead className="hidden sm:table-cell">大小</TableHead>
+            <TableHead className="hidden md:table-cell">上传日期</TableHead>
+            <TableHead className="hidden md:table-cell">CID</TableHead>
+            <TableHead>状态</TableHead>
+            <TableHead className="w-[70px]"></TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {files.map((file) => (
+            <TableRow key={file.id}>
+              <TableCell>
+                <FileIcon className="h-4 w-4 text-muted-foreground" />
+              </TableCell>
+              <TableCell className="font-medium max-w-[200px] truncate">{file.name}</TableCell>
+              <TableCell className="hidden sm:table-cell">{formatFileSize(file.size)}</TableCell>
+              <TableCell className="hidden md:table-cell text-muted-foreground">
+                {formatDate(file.uploadDate)}
+              </TableCell>
+              <TableCell className="hidden md:table-cell">
+                {file.cid ? (
+                  <div className="flex items-center gap-2">
+                    <code className="text-xs bg-muted px-2 py-1 rounded max-w-[100px] truncate">
+                      {file.cid}
+                    </code>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6"
+                      onClick={() => handleCopyCID(file.cid!)}
+                    >
+                      <Copy className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ) : (
+                  <span className="text-muted-foreground text-xs">-</span>
+                )}
+              </TableCell>
+              <TableCell>{getStatusBadge(file.status, file.progress)}</TableCell>
+              <TableCell>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem
+                      onClick={() => handleCopyCID(file.cid!)}
+                      disabled={!file.cid}
+                    >
+                      <Copy className="mr-2 h-4 w-4" />
+                      复制 CID
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => {
+                        // TODO: 实现重命名功能
+                        toast.info('重命名功能即将上线');
+                      }}
+                    >
+                      <Edit2 className="mr-2 h-4 w-4" />
+                      重命名
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => handleDelete(file.id)}
+                      className="text-red-600"
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      删除
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
