@@ -1,7 +1,7 @@
 /**
  * CloudChan 分享 API
  * 用于创建和访问分享链接
- * @version 2.2.2
+ * @version 2.2.1
  */
 
 export async function onRequest(context) {

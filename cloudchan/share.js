@@ -1,12 +1,12 @@
 /**
  * CloudChan 分享页面脚本
  * 用于处理分享链接的访问、验证和文件下载
- * @version 2.2.2
+ * @version 2.2.1
  */
 
 // 配置
 const CONFIG = {
-    version: '2.2.2',
+    version: '2.2.1',
     apiBase: '/api',
     ipfsGateway: 'https://ipfs.io/ipfs/',
     fallbackGateway: 'https://dweb.link/ipfs/'
