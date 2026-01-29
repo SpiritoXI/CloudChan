@@ -11,10 +11,11 @@ export function getPinCode(): string {
   const pin = process.env.PIN_CODE;
 
   if (!pin) {
-    console.warn('PIN_CODE 未设置，使用默认值（仅用于开发）');
+    console.warn('[Auth] PIN_CODE 环境变量未设置，使用默认值（仅用于开发）');
     return '123456'; // 默认 PIN 码
   }
 
+  console.log('[Auth] PIN_CODE 环境变量已设置');
   return pin;
 }
 
@@ -25,5 +26,13 @@ export function getPinCode(): string {
  */
 export function verifyPinCode(inputPin: string): boolean {
   const correctPin = getPinCode();
-  return inputPin === correctPin;
+  const isValid = inputPin === correctPin;
+
+  if (!isValid) {
+    console.error('[Auth] PIN 码验证失败');
+  } else {
+    console.log('[Auth] PIN 码验证成功');
+  }
+
+  return isValid;
 }

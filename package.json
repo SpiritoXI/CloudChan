@@ -1,6 +1,6 @@
 {
   "name": "projects",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "private": true,
   "scripts": {
     "build": "bash ./scripts/build.sh",
@@ -8,7 +8,8 @@
     "preinstall": "npx only-allow pnpm",
     "lint": "eslint",
     "start": "bash ./scripts/start.sh",
-    "ts-check": "tsc -p tsconfig.json"
+    "ts-check": "tsc -p tsconfig.json",
+    "vercel:health-check": "node scripts/vercel-health-check.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.958.0",

@@ -376,12 +376,25 @@ docker build -t crustshare .
 docker run -p 5000:5000 crustshare
 ```
 
-### 方式三：Vercel 部署
+### 方式三：Vercel 部署（推荐）
+
+👉 **详细部署指南：** [Vercel 部署文档](./docs/VERCEL_DEPLOYMENT.md)
+
+快速开始：
 
 1. 将代码推送到 GitHub
-2. 在 Vercel 中导入项目
-3. 配置环境变量（如需要）
-4. 部署
+2. 在 [Vercel](https://vercel.com) 中导入项目
+3. **关键步骤**：在 Project Settings → Environment Variables 中添加：
+   - `PIN_CODE`（必须）- 设置你的 PIN 码
+   - `CRUSTFILES_ACCESS_TOKEN`（可选）- 文件上传功能需要
+   - `CRUSTFILES_BASE_URL`（可选）- 默认为 `https://crustfiles.io`
+4. **重要**：添加环境变量后，必须重新部署才能生效
+5. 部署完成后即可访问
+
+**常见问题**：
+- 如果登录失败，请检查环境变量 `PIN_CODE` 是否已正确配置
+- 环境变量修改后需要手动重新部署（Redeploy）
+- 详见 [Vercel 部署指南](./docs/VERCEL_DEPLOYMENT.md#常见问题排查)
 
 ### 环境变量
 
