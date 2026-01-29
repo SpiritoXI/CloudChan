@@ -118,7 +118,12 @@ crustshare/
 ├── src/
 │   ├── app/                    # Next.js App Router
 │   │   ├── api/               # API 路由
+│   │   │   ├── auth/          # 认证 API
+│   │   │   │   └── login/     # 登录接口
 │   │   │   └── crust/         # Crust Network API
+│   │   │       ├── status/    # 存储状态
+│   │   │       ├── storage/   # 存储管理
+│   │   │       └── upload/    # 文件上传
 │   │   ├── login/             # 登录页面
 │   │   ├── dashboard/         # 主仪表板
 │   │   └── globals.css        # 全局样式
@@ -131,20 +136,48 @@ crustshare/
 │   │   ├── TagManager.tsx    # 标签管理
 │   │   ├── PermissionManager.tsx # 权限管理
 │   │   ├── VersionHistory.tsx # 版本历史
-│   │   └── ...
+│   │   └── LoginPage.tsx     # 登录页面
 │   ├── lib/                   # 工具库
+│   │   ├── auth.ts           # 认证工具（密码哈希）
+│   │   ├── redis.ts          # Redis 客户端（会话管理）
 │   │   ├── crust.ts          # Crust Network 客户端
 │   │   └── cache.ts          # 缓存工具
-│   └── store/                 # 状态管理
-│       └── useStore.ts       # Zustand 状态
+│   ├── store/                 # 状态管理
+│   │   └── useStore.ts       # Zustand 状态
+│   └── hooks/                 # 自定义 Hooks
 ├── public/                    # 静态资源
+├── scripts/                   # 工具脚本
+│   └── generate-config.js    # 配置生成脚本
 ├── .coze                      # Coze CLI 配置
+├── .env                       # 环境变量（不提交）
+├── .env.example               # 环境变量模板
 └── package.json              # 项目配置
 ```
 
 ### 核心功能
 
-#### 1. 文件上传
+#### 1. 用户认证
+
+基于密码哈希的认证系统：
+
+```typescript
+// 登录验证
+const response = await fetch('/api/auth/login', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    password: 'crustshare',
+    isAdmin: false
+  })
+});
+```
+
+- **密码加密**：SHA-256 哈希
+- **角色管理**：普通用户和管理员
+- **会话存储**：localStorage 或 Upstash Redis
+- **JWT 支持**：可选的 JWT 令牌验证
+
+#### 2. 文件上传
 
 文件上传到 Crust Network/IPFS：
 
@@ -298,6 +331,86 @@ NODE_ENV=production
 - [Next.js](https://nextjs.org/)
 - [shadcn/ui](https://ui.shadcn.com/)
 - [Tailwind CSS](https://tailwindcss.com/)
+
+### 文档
+
+- [API 文档](./API.md) - 完整的 API 接口文档
+- [部署文档](./DEPLOYMENT.md) - 部署指南和故障排除
+- [更新日志](./CHANGELOG.md) - 版本更新历史
+- [贡献指南](./CONTRIBUTING.md) - 如何贡献代码
+- [安全政策](./SECURITY.md) - 安全漏洞报告流程
+
+---
+
+## ❓ 常见问题
+
+### 1. 如何修改密码？
+
+使用配置生成脚本：
+
+```bash
+node scripts/generate-config.js
+```
+
+或手动生成哈希：
+
+```bash
+echo -n "new_password" | sha256sum
+```
+
+然后将哈希值更新到 `.env` 文件中的 `PASSWORD_HASH` 或 `ADMIN_PASSWORD_HASH`。
+
+### 2. 如何配置 Upstash Redis？
+
+1. 访问 [Upstash Console](https://console.upstash.com/)
+2. 创建新的 Redis 数据库
+3. 复制 REST URL 和 Token
+4. 更新到 `.env` 文件：
+
+```env
+UPSTASH_REDIS_REST_URL=https://your-redis-url.upstash.io
+UPSTASH_REDIS_REST_TOKEN=your-redis-token
+```
+
+### 3. 默认密码是什么？
+
+- **用户密码**: `crustshare`
+- **管理员密码**: `admin`
+
+**安全提示**：生产环境请务必修改默认密码！
+
+### 4. 文件上传失败怎么办？
+
+检查以下几点：
+1. 确认网络连接正常
+2. 检查文件大小是否超过限制
+3. 查看浏览器控制台错误信息
+4. 确认 Crust Network 服务状态
+
+### 5. 如何重置配置？
+
+删除 `.env` 文件，然后重新生成：
+
+```bash
+rm .env
+node scripts/generate-config.js
+```
+
+### 6. 会话过期时间是多少？
+
+默认会话时长为 24 小时。可以在代码中修改 `sessionManager.create()` 的 TTL 参数。
+
+### 7. 是否支持多用户？
+
+当前版本支持单用户和管理员两种角色。多用户支持计划在未来版本中添加。
+
+### 8. 文件存储在哪里？
+
+文件通过 Crust Network 上传到 IPFS 分布式存储网络，具有以下特点：
+- 去中心化存储
+- 内容寻址（CID）
+- 永久可用
+- 全球分布式节点
 
 ---
 

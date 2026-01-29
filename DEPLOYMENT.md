@@ -502,6 +502,207 @@ curl http://localhost:5000
 
 ---
 
+## 故障排除
+
+### 问题 1：服务启动失败
+
+**症状**：运行 `pnpm start` 或 `coze dev` 时服务无法启动
+
+**可能原因**：
+1. 端口被占用
+2. 依赖未安装
+3. 环境变量配置错误
+
+**解决方案**：
+
+```bash
+# 检查端口占用
+ss -tuln | grep :5000
+
+# 终止占用进程
+kill -9 $(lsof -ti:5000)
+
+# 重新安装依赖
+rm -rf node_modules .next
+pnpm install
+
+# 检查环境变量
+cat .env
+```
+
+### 问题 2：登录失败
+
+**症状**：输入正确密码但登录失败
+
+**可能原因**：
+1. 密码哈希不匹配
+2. 环境变量未加载
+3. 前端缓存问题
+
+**解决方案**：
+
+```bash
+# 重新生成密码哈希
+echo -n "your_password" | sha256sum
+
+# 更新 .env 文件
+# PASSWORD_HASH=<新的哈希值>
+
+# 重启服务
+pnpm dev
+
+# 清除浏览器缓存和 localStorage
+```
+
+### 问题 3：文件上传失败
+
+**症状**：文件上传卡住或报错
+
+**可能原因**：
+1. 网络连接问题
+2. 文件过大
+3. Crust Network 服务异常
+
+**解决方案**：
+
+```bash
+# 检查网络连接
+ping ipfs.io
+
+# 测试 IPFS 网关
+curl https://ipfs.io/ipfs/QmQqzMTavQgT4f4T5v6P7p6yv9N3Z1v6M7v8N9v8Q9zR
+
+# 检查浏览器控制台错误
+# F12 打开开发者工具
+```
+
+### 问题 4：构建失败
+
+**症状**：运行 `pnpm build` 时出现错误
+
+**可能原因**：
+1. TypeScript 类型错误
+2. 依赖版本冲突
+3. 缓存损坏
+
+**解决方案**：
+
+```bash
+# 检查 TypeScript 类型
+pnpm tsc --noEmit
+
+# 清理缓存
+rm -rf .next node_modules
+
+# 重新安装依赖
+pnpm install
+
+# 重新构建
+pnpm build
+```
+
+### 问题 5：页面样式错乱
+
+**症状**：页面显示异常，样式未加载
+
+**可能原因**：
+1. Tailwind CSS 配置问题
+2. 静态资源路径错误
+3. 浏览器缓存
+
+**解决方案**：
+
+```bash
+# 检查 Tailwind 配置
+cat tailwind.config.ts
+
+# 清除 .next 缓存
+rm -rf .next
+
+# 强制刷新浏览器
+Ctrl + Shift + R
+```
+
+### 问题 6：会话丢失
+
+**症状**：频繁需要重新登录
+
+**可能原因**：
+1. localStorage 被清除
+2. 会话过期
+3. 浏览器隐私设置
+
+**解决方案**：
+
+```bash
+# 检查 localStorage
+# F12 打开开发者工具
+# Application -> Local Storage
+
+# 配置 Upstash Redis
+# 在 .env 中添加：
+UPSTASH_REDIS_REST_URL=https://your-redis-url.upstash.io
+UPSTASH_REDIS_REST_TOKEN=your-redis-token
+
+# 重启服务
+pnpm dev
+```
+
+### 问题 7：API 请求失败
+
+**症状**：API 调用返回 500 或超时
+
+**可能原因**：
+1. 服务器错误
+2. 网络问题
+3. API 路由配置错误
+
+**解决方案**：
+
+```bash
+# 检查服务器日志
+tail -n 20 /app/work/logs/bypass/app.log
+
+# 测试 API
+curl -X POST http://localhost:5000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"password":"crustshare","isAdmin":false}'
+
+# 检查 API 路由
+ls -la src/app/api/
+```
+
+### 问题 8：内存溢出
+
+**症状**：服务运行一段时间后崩溃
+
+**可能原因**：
+1. 内存泄漏
+2. 文件缓存过大
+3. 并发请求过多
+
+**解决方案**：
+
+```bash
+# 使用 PM2 增加内存限制
+pm2 start npm --name "crustshare" -- start --max-memory-restart 1G
+
+# 清理缓存
+rm -rf .next/cache
+
+# 优化文件上传大小限制
+# 在 next.config.js 中配置：
+{
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '2mb',
+    },
+  },
+}
+```
+
+---
+
 ## 安全建议
 
 1. **HTTPS** - 生产环境必须使用 HTTPS
