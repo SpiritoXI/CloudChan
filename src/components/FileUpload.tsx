@@ -21,8 +21,8 @@ interface FileUploadProps {
   onClose: () => void;
 }
 
-// 直连上传的文件大小限制（100MB，可根据 CrustFiles.io 限制调整）
-const MAX_FILE_SIZE_DIRECT = 100 * 1024 * 1024; // 100MB in bytes
+// 直连上传的文件大小限制（1GB，可根据 CrustFiles.io 限制调整）
+const MAX_FILE_SIZE_DIRECT = 1 * 1024 * 1024 * 1024; // 1GB in bytes
 
 export default function FileUpload({ file, onClose }: FileUploadProps) {
   const [progress, setProgress] = useState(0);

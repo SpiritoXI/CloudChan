@@ -23,15 +23,58 @@ export interface DirectUploadResult {
   size?: number;
   url?: string;
   error?: string;
+  gateway?: string; // 使用的网关
 }
 
+// 网关配置
+export const GATEWAYS = {
+  PRIMARY: 'https://gw.w3ipfs.org.cn', // 国内优选
+  OFFICIAL: 'https://gw.crustfiles.app', // 官方主推
+  DEVELOPER: 'https://crustipfs.xyz' // 开发者/海外兜底
+};
+
+// 网关优先级列表
+export const GATEWAY_PRIORITY = [
+  GATEWAYS.PRIMARY,
+  GATEWAYS.OFFICIAL,
+  GATEWAYS.DEVELOPER
+];
+
 class CrustFilesDirectClient {
-  private baseUrl: string;
+  private gateways: string[];
+  private currentGatewayIndex: number;
   private authToken?: string;
 
   constructor(authToken?: string) {
-    this.baseUrl = process.env.CRUSTFILES_BASE_URL || 'https://crustfiles.io';
+    // 使用网关优先级列表
+    this.gateways = GATEWAY_PRIORITY;
+    this.currentGatewayIndex = 0;
     this.authToken = authToken;
+  }
+
+  /**
+   * 获取当前使用的网关
+   */
+  getCurrentGateway(): string {
+    return this.gateways[this.currentGatewayIndex];
+  }
+
+  /**
+   * 切换到下一个网关
+   */
+  switchToNextGateway(): string {
+    this.currentGatewayIndex = (this.currentGatewayIndex + 1) % this.gateways.length;
+    const newGateway = this.getCurrentGateway();
+    console.log(`[CrustFiles] 切换到下一个网关: ${newGateway}`);
+    return newGateway;
+  }
+
+  /**
+   * 重置网关到第一个
+   */
+  resetGateway(): void {
+    this.currentGatewayIndex = 0;
+    console.log(`[CrustFiles] 重置网关到: ${this.getCurrentGateway()}`);
   }
 
   /**
@@ -58,10 +101,11 @@ class CrustFilesDirectClient {
   /**
    * 构建完整的 API URL
    */
-  private buildUrl(path: string): string {
+  private buildUrl(path: string, gateway?: string): string {
+    const baseUrl = gateway || this.getCurrentGateway();
     // 移除开头的斜杠，避免重复
     const cleanPath = path.startsWith('/') ? path.slice(1) : path;
-    return `${this.baseUrl}/${cleanPath}`;
+    return `${baseUrl}/${cleanPath}`;
   }
 
   /**
@@ -88,9 +132,52 @@ class CrustFilesDirectClient {
   /**
    * 上传文件（直接连接 CrustFiles.io）
    * 使用 XMLHttpRequest 以支持上传进度
+   * 实现多网关自动切换
    */
   async upload(
     file: File,
+    options?: DirectUploadOptions
+  ): Promise<DirectUploadResult> {
+    // 重置网关索引
+    this.resetGateway();
+    
+    // 尝试所有网关
+    for (let attempt = 0; attempt < this.gateways.length; attempt++) {
+      const currentGateway = this.getCurrentGateway();
+      console.log(`[CrustFiles] 尝试上传到网关: ${currentGateway} (尝试 ${attempt + 1}/${this.gateways.length})`);
+      
+      const result = await this.uploadWithGateway(file, currentGateway, options);
+      
+      if (result.success) {
+        console.log(`[CrustFiles] 上传成功，使用网关: ${currentGateway}`);
+        return {
+          ...result,
+          gateway: currentGateway
+        };
+      } else {
+        console.warn(`[CrustFiles] 网关 ${currentGateway} 上传失败: ${result.error}`);
+        
+        // 如果不是最后一个网关，切换到下一个
+        if (attempt < this.gateways.length - 1) {
+          this.switchToNextGateway();
+        }
+      }
+    }
+    
+    // 所有网关都失败
+    return {
+      success: false,
+      error: '所有网关上传失败，请检查网络连接后重试',
+      gateway: this.getCurrentGateway()
+    };
+  }
+
+  /**
+   * 使用指定网关上传文件
+   */
+  private uploadWithGateway(
+    file: File,
+    gateway: string,
     options?: DirectUploadOptions
   ): Promise<DirectUploadResult> {
     return new Promise((resolve) => {
@@ -98,13 +185,15 @@ class CrustFilesDirectClient {
       formData.append('file', file);
 
       const xhr = new XMLHttpRequest();
-      const url = this.buildUrl('/api/v0/add');
+      const url = this.buildUrl('/api/v0/add', gateway);
+
+      console.log(`[CrustFiles] 上传 URL: ${url}`);
 
       // 监听上传进度
       if (options?.onProgress) {
         xhr.upload.addEventListener('progress', (event) => {
           if (event.lengthComputable) {
-            options.onProgress!({
+            options.onProgress!({  
               loaded: event.loaded,
               total: event.total,
               percentage: (event.loaded / event.total) * 100,
@@ -134,7 +223,7 @@ class CrustFilesDirectClient {
             cid: data.Hash || data.cid,
             name: data.Name || data.name || file.name,
             size: data.Size || data.size || file.size,
-            url: `${this.baseUrl}/ipfs/${data.Hash || data.cid}`,
+            url: `${gateway}/ipfs/${data.Hash || data.cid}`,
           });
         } else {
           resolve({
@@ -187,7 +276,38 @@ class CrustFilesDirectClient {
    * 下载文件（直接连接 CrustFiles.io）
    */
   async download(cid: string, fileName?: string): Promise<Blob> {
-    const url = this.buildUrl(`/ipfs/${cid}`);
+    // 重置网关索引
+    this.resetGateway();
+    
+    // 尝试所有网关
+    for (let attempt = 0; attempt < this.gateways.length; attempt++) {
+      const currentGateway = this.getCurrentGateway();
+      console.log(`[CrustFiles] 尝试从网关下载: ${currentGateway}`);
+      
+      try {
+        const result = await this.downloadWithGateway(cid, currentGateway);
+        console.log(`[CrustFiles] 下载成功，使用网关: ${currentGateway}`);
+        return result;
+      } catch (error) {
+        console.warn(`[CrustFiles] 网关 ${currentGateway} 下载失败: ${error}`);
+        
+        // 如果不是最后一个网关，切换到下一个
+        if (attempt < this.gateways.length - 1) {
+          this.switchToNextGateway();
+        } else {
+          throw error;
+        }
+      }
+    }
+    
+    throw new Error('所有网关下载失败');
+  }
+
+  /**
+   * 使用指定网关下载文件
+   */
+  private async downloadWithGateway(cid: string, gateway: string): Promise<Blob> {
+    const url = this.buildUrl(`/ipfs/${cid}`, gateway);
     const requestHeaders = this.buildHeaders();
 
     const response = await fetch(url, {
@@ -206,7 +326,36 @@ class CrustFilesDirectClient {
    * 获取文件信息
    */
   async getFileInfo(cid: string): Promise<any> {
-    const url = this.buildUrl(`/api/v0/object/stat?arg=${cid}`);
+    // 重置网关索引
+    this.resetGateway();
+    
+    // 尝试所有网关
+    for (let attempt = 0; attempt < this.gateways.length; attempt++) {
+      const currentGateway = this.getCurrentGateway();
+      
+      try {
+        const result = await this.getFileInfoWithGateway(cid, currentGateway);
+        return result;
+      } catch (error) {
+        console.warn(`[CrustFiles] 网关 ${currentGateway} 获取文件信息失败: ${error}`);
+        
+        // 如果不是最后一个网关，切换到下一个
+        if (attempt < this.gateways.length - 1) {
+          this.switchToNextGateway();
+        } else {
+          throw error;
+        }
+      }
+    }
+    
+    throw new Error('所有网关获取文件信息失败');
+  }
+
+  /**
+   * 使用指定网关获取文件信息
+   */
+  private async getFileInfoWithGateway(cid: string, gateway: string): Promise<any> {
+    const url = this.buildUrl(`/api/v0/object/stat?arg=${cid}`, gateway);
     const requestHeaders = this.buildHeaders();
 
     const response = await fetch(url, {
@@ -224,8 +373,43 @@ class CrustFilesDirectClient {
   /**
    * 执行 pin 操作（固定文件）
    */
-  async pin(cid: string): Promise<{ success: boolean; error?: string }> {
-    const url = this.buildUrl(`/api/v0/pin/add?arg=${cid}`);
+  async pin(cid: string): Promise<{ success: boolean; error?: string; gateway?: string }> {
+    // 重置网关索引
+    this.resetGateway();
+    
+    // 尝试所有网关
+    for (let attempt = 0; attempt < this.gateways.length; attempt++) {
+      const currentGateway = this.getCurrentGateway();
+      
+      try {
+        const result = await this.pinWithGateway(cid, currentGateway);
+        if (result.success) {
+          return {
+            ...result,
+            gateway: currentGateway
+          };
+        }
+      } catch (error) {
+        console.warn(`[CrustFiles] 网关 ${currentGateway} pin 失败: ${error}`);
+      }
+      
+      // 如果不是最后一个网关，切换到下一个
+      if (attempt < this.gateways.length - 1) {
+        this.switchToNextGateway();
+      }
+    }
+    
+    return {
+      success: false,
+      error: '所有网关 pin 操作失败'
+    };
+  }
+
+  /**
+   * 使用指定网关执行 pin 操作
+   */
+  private async pinWithGateway(cid: string, gateway: string): Promise<{ success: boolean; error?: string }> {
+    const url = this.buildUrl(`/api/v0/pin/add?arg=${cid}`, gateway);
     const requestHeaders = this.buildHeaders();
 
     const response = await fetch(url, {
@@ -247,7 +431,36 @@ class CrustFilesDirectClient {
    * 检查 pin 状态
    */
   async isPinned(cid: string): Promise<boolean> {
-    const url = this.buildUrl(`/api/v0/pin/ls?arg=${cid}`);
+    // 重置网关索引
+    this.resetGateway();
+    
+    // 尝试所有网关
+    for (let attempt = 0; attempt < this.gateways.length; attempt++) {
+      const currentGateway = this.getCurrentGateway();
+      
+      try {
+        const result = await this.isPinnedWithGateway(cid, currentGateway);
+        if (result) {
+          return true;
+        }
+      } catch (error) {
+        console.warn(`[CrustFiles] 网关 ${currentGateway} 检查 pin 状态失败: ${error}`);
+      }
+      
+      // 如果不是最后一个网关，切换到下一个
+      if (attempt < this.gateways.length - 1) {
+        this.switchToNextGateway();
+      }
+    }
+    
+    return false;
+  }
+
+  /**
+   * 使用指定网关检查 pin 状态
+   */
+  private async isPinnedWithGateway(cid: string, gateway: string): Promise<boolean> {
+    const url = this.buildUrl(`/api/v0/pin/ls?arg=${cid}`, gateway);
     const requestHeaders = this.buildHeaders();
 
     try {

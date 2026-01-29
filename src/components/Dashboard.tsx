@@ -17,8 +17,8 @@ import MoveFileDialog from './DialogMove';
 import MobileNav from './MobileNav';
 import TokenConfigDialog, { getTokenFromStorage } from './DialogTokenConfig';
 
-// 直连上传的文件大小限制（100MB）
-const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB in bytes
+// 直连上传的文件大小限制（1GB）
+const MAX_FILE_SIZE = 1 * 1024 * 1024 * 1024; // 1GB in bytes
 
 // 格式化文件大小
 function formatFileSize(bytes: number): string {
@@ -137,7 +137,7 @@ export default function Dashboard() {
         <div className="mb-8">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="bg-gradient-to-r from-purple-500/80 via-pink-500/70 to-blue-500/80 bg-clip-text text-3xl font-bold tracking-tight text-transparent">
+              <h1 className="bg-gradient-to-r from-purple-600/90 via-pink-500/80 to-blue-400/90 bg-clip-text text-3xl font-bold tracking-tight text-transparent">
                 CrustShare
               </h1>
               <p className="text-muted-foreground mt-1">安全的分布式文件存储平台</p>
