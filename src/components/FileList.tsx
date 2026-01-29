@@ -24,7 +24,6 @@ import RenameDialog from './RenameDialog';
 import ShareDialog from './ShareDialog';
 import DownloadDialog from './DownloadDialog';
 import VersionHistory from './VersionHistory';
-import PermissionManager from './PermissionManager';
 import FilePreview from './FilePreview';
 
 interface FileListProps {
@@ -290,15 +289,6 @@ export default function FileList({ files }: FileListProps) {
         fileName={versionFile.name}
         open={!!versionFile}
         onOpenChange={(open) => !open && setVersionFile(null)}
-      />
-    )}
-
-    {permissionFile && (
-      <PermissionManager
-        fileId={permissionFile.id}
-        fileName={permissionFile.name}
-        open={!!permissionFile}
-        onOpenChange={(open) => !open && setPermissionFile(null)}
       />
     )}
 

@@ -5,7 +5,6 @@
 
 import { initializeGatewayManager } from '@/lib/gateway/config';
 import { getGatewayMapper } from '@/lib/gateway/mapper';
-import logger, { LogType } from '@/lib/logger';
 
 export function initializeApp() {
   try {
@@ -16,13 +15,12 @@ export function initializeApp() {
     const mapper = getGatewayMapper();
     const cleaned = mapper.cleanExpiredMappings();
     if (cleaned > 0) {
-      logger.info(LogType.GATEWAY, `清理了 ${cleaned} 个过期下载映射`);
+      console.log(`[Gateway] 清理了 ${cleaned} 个过期下载映射`);
     }
 
     console.log('[App] 应用初始化完成');
   } catch (error) {
     console.error('[App] 应用初始化失败:', error);
-    logger.error(LogType.SYSTEM, '应用初始化失败', { error });
   }
 }
 

@@ -63,6 +63,11 @@ export async function POST(request: NextRequest) {
     }
   } catch (error) {
     console.error('文件上传错误:', error);
+    console.error('错误详情:', {
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      name: error instanceof Error ? error.name : undefined,
+    });
     return NextResponse.json(
       { success: false, error: '服务器错误' },
       { status: 500 }

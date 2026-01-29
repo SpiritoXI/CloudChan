@@ -17,6 +17,48 @@ CrustShare 现已集成 CrustFiles.io 网关，提供更稳定和快速的文件
 
 ---
 
+## 重要说明
+
+### API 路径与认证方式
+
+⚠️ **当前状态**：代码中的 CrustFiles.io API 路径和认证方式基于假设，**需要根据实际 API 文档进行调整**。
+
+#### 需要确认的内容
+
+1. **API 路径**：
+   - 当前假设：`/api/v1/upload`
+   - 可能的替代路径：
+     - `/api/upload`
+     - `/upload`
+     - `/api/files/upload`
+   - **请查阅 CrustFiles.io 的官方 API 文档确认正确的路径**
+
+2. **认证方式**：
+   - 当前假设：`access_token` 作为 FormData 参数
+   - 可能的替代方式：
+     - `Authorization: Bearer {token}` header
+     - `X-Access-Token` header
+   - **请查阅 CrustFiles.io 的官方 API 文档确认正确的认证方式**
+
+3. **请求参数**：
+   - 当前假设：FormData 包含 `file` 字段
+   - 可能需要其他参数：`filename`, `content_type` 等
+
+#### 如何确认正确的 API 规格
+
+1. 访问 [CrustFiles.io](https://crustfiles.io/) 查找 API 文档
+2. 或联系 CrustFiles.io 支持团队获取 API 规格
+3. 使用工具（如 Postman）测试不同的 API 路径和认证方式
+
+#### 临时解决方案
+
+如果 CrustFiles.io 的 API 不符合预期，可以考虑：
+- 使用其他 IPFS 网关（如 Pinata、Web3.Storage）
+- 使用对象存储服务（如 AWS S3、阿里云 OSS）
+- 或等待 CrustFiles.io 提供官方 API 文档
+
+---
+
 ## 配置步骤
 
 ### 1. 获取 CrustFiles.io Access Token
@@ -178,13 +220,48 @@ CRUSTFILES_ACCESS_TOKEN=your_token
 CRUSTFILES_ACCESS_TOKEN=your_actual_token
 ```
 
-### 问题 2：上传失败 - "文件大小超过限制"
+### 问题 2：上传失败 - "405 Not Allowed"
+
+**原因**：API 路径或认证方式不正确
+
+**解决**：
+1. 检查日志中的 `[CrustFiles] 上传 URL` 确认使用的 API 路径
+2. 查阅 CrustFiles.io 的官方 API 文档
+3. 修改 `src/lib/crustfiles.ts` 中的 `uploadUrl` 变量
+4. 或者修改认证方式（Authorization header vs FormData 参数）
+
+**示例修改**：
+
+```typescript
+// 如果需要使用 Authorization header
+const response = await fetch(uploadUrl, {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${this.accessToken}`,
+  },
+  body: formData, // 注意：FormData 可能不支持自定义 headers
+});
+```
+
+### 问题 3：上传失败 - "服务器返回无效的响应"
+
+**原因**：
+1. API 返回了 HTML 而不是 JSON（通常表示 404/405/500 错误）
+2. Access Token 无效
+3. API 路径不正确
+
+**解决**：
+1. 检查日志中的 `[CrustFiles] 上传响应内容`
+2. 验证 Access Token 是否有效
+3. 查阅 CrustFiles.io 的官方 API 文档确认正确的请求格式
+
+### 问题 4：上传失败 - "文件大小超过限制"
 
 **原因**：文件超过 100MB
 
 **解决**：压缩文件或使用其他方式上传
 
-### 问题 3：下载失败
+### 问题 5：下载失败
 
 **原因**：网络问题或文件不存在
 
@@ -192,6 +269,42 @@ CRUSTFILES_ACCESS_TOKEN=your_actual_token
 1. 检查网络连接
 2. 验证 CID 是否正确
 3. 尝试使用其他网关：`https://ipfs.io/ipfs/{cid}`
+
+---
+
+## 调试建议
+
+### 启用详细日志
+
+代码中已添加详细日志，可以在控制台查看：
+
+```typescript
+console.log('[CrustFiles] 开始上传文件:', { fileName, fileSize, baseUrl, hasAccessToken });
+console.log('[CrustFiles] 上传 URL:', uploadUrl);
+console.log('[CrustFiles] 上传响应状态:', response.status);
+console.log('[CrustFiles] 上传响应内容:', responseText);
+```
+
+### 使用 curl 测试
+
+```bash
+# 测试 API 路径是否可达
+curl -X POST https://crustfiles.io/api/v1/upload
+
+# 测试不同的 API 路径
+curl -X POST https://crustfiles.io/api/upload
+curl -X POST https://crustfiles.io/upload
+```
+
+### 查看日志
+
+```bash
+# 查看开发日志
+tail -f /app/work/logs/bypass/dev.log
+
+# 搜索 CrustFiles 相关日志
+tail -f /app/work/logs/bypass/dev.log | grep "CrustFiles"
+```
 
 ---
 

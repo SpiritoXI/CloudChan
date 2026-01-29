@@ -59,13 +59,39 @@ export class CrustFilesClient {
       formData.append('file', blob, options.fileName);
       formData.append('access_token', this.accessToken);
 
+      console.log('[CrustFiles] 开始上传文件:', {
+        fileName: options.fileName,
+        fileSize: options.fileSize,
+        baseUrl: this.baseUrl,
+        hasAccessToken: !!this.accessToken,
+      });
+
       // 发送上传请求
-      const response = await fetch(`${this.baseUrl}/api/upload`, {
+      // 注意：CrustFiles.io 的 API 路径可能需要根据实际文档调整
+      // 目前使用的是假设的路径，可能需要验证
+      const uploadUrl = `${this.baseUrl}/api/v1/upload`;
+      console.log('[CrustFiles] 上传 URL:', uploadUrl);
+
+      const response = await fetch(uploadUrl, {
         method: 'POST',
         body: formData,
       });
 
-      const data = await response.json();
+      console.log('[CrustFiles] 上传响应状态:', response.status);
+
+      const responseText = await response.text();
+      console.log('[CrustFiles] 上传响应内容:', responseText);
+
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch {
+        console.error('[CrustFiles] 解析响应失败:', responseText);
+        return {
+          success: false,
+          error: `服务器返回无效的响应: ${responseText}`,
+        };
+      }
 
       if (response.ok && data.success) {
         return {

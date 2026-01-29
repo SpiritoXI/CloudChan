@@ -440,88 +440,6 @@ manager.addGateway({
 - 应用启动时从缓存加载状态
 - 支持手动清理过期数据
 
-## 日志记录
-
-**文件**: `src/lib/logger.ts`
-
-### 日志类型
-
-```typescript
-export enum LogType {
-  UPLOAD = 'upload',       // 上传相关
-  DOWNLOAD = 'download',   // 下载相关
-  GATEWAY = 'gateway',     // 网关相关
-  PROXY = 'proxy',         // 代理相关
-  SYSTEM = 'system',       // 系统相关
-}
-```
-
-### 日志级别
-
-```typescript
-export enum LogLevel {
-  DEBUG = 'debug',
-  INFO = 'info',
-  WARN = 'warn',
-  ERROR = 'error',
-}
-```
-
-### 使用示例
-
-```typescript
-import logger from '@/lib/logger';
-
-// 上传日志
-logger.uploadStart(fileId, fileName, fileSize);
-logger.uploadProgress(fileId, fileName, 50);
-logger.uploadSuccess(fileId, fileName, cid, 2340);
-logger.uploadError(fileId, fileName, '网络错误');
-
-// 下载日志
-logger.downloadStart(fileId, fileName, 'ipfs-io');
-logger.downloadSuccess(fileId, fileName, 'ipfs-io', 1200);
-logger.downloadError(fileId, fileName, 'ipfs-io', '网关超时');
-logger.downloadRetry(fileId, fileName, 'ipfs-io', 'dweb-link');
-
-// 网关日志
-logger.gatewayCheckStart('ipfs-io');
-logger.gatewayCheckSuccess('ipfs-io', 120);
-logger.gatewayCheckFailed('ipfs-io', '超时');
-logger.gatewayStatusChange('ipfs-io', 'available', 'unavailable');
-logger.gatewaySelected('ipfs-io', fileId);
-logger.gatewayUnavailable('ipfs-io', '网络错误');
-```
-
-### 日志查询
-
-```typescript
-// 获取所有日志
-const logs = logger.getLogs();
-
-// 按类型筛选
-const uploadLogs = logger.getLogsByType(LogType.UPLOAD);
-const gatewayLogs = logger.getLogsByType(LogType.GATEWAY);
-
-// 按级别筛选
-const errorLogs = logger.getLogsByLevel(LogLevel.ERROR);
-
-// 按文件 ID 筛选
-const fileLogs = logger.getLogsByFileId(fileId);
-
-// 按网关 ID 筛选
-const gatewayLogs = logger.getLogsByGatewayId('ipfs-io');
-
-// 获取最近日志
-const recentLogs = logger.getRecentLogs(50);
-
-// 导出日志
-const logString = logger.exportLogs();
-
-// 获取统计信息
-const stats = logger.getStatistics();
-```
-
 ## 安全性
 
 ### 1. 网关认证
@@ -539,12 +457,6 @@ const stats = logger.getStatistics();
 - 下载 URL 包含访问令牌（如果需要）
 - 令牌与映射关联，24 小时后过期
 - 支持令牌刷新
-
-### 3. 数据隔离
-
-- 不同用户的映射相互独立
-- 网关状态全局共享
-- 日志包含用户和文件标识
 
 ## 性能优化
 
@@ -577,7 +489,6 @@ const stats = logger.getStatistics();
 **解决方案**:
 - 检查网络连接
 - 查看网关状态 API
-- 查看控制台日志
 - 添加自定义网关
 
 ### 2. 下载失败
@@ -587,8 +498,7 @@ const stats = logger.getStatistics();
 **解决方案**:
 - 检查 CID 是否正确
 - 尝试切换网关
-- 查看浏览器控制台
-- 检查网关日志
+- 检查网关状态
 
 ### 3. 网关状态异常
 
@@ -596,7 +506,6 @@ const stats = logger.getStatistics();
 
 **解决方案**:
 - 检查网关 URL 是否正确
-- 查看网关健康日志
 - 检查网络连接
 - 禁用问题网关
 
@@ -649,7 +558,6 @@ const stats = logger.getStatistics();
 - ✨ 实现网关健康检测
 - ✨ 实现下载映射管理
 - ✨ 实现状态缓存机制
-- ✨ 实现日志记录系统
 - ✨ 实现故障自动切换
 - 📝 完善文档
 
