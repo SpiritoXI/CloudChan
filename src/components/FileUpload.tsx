@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { FileIcon, X, CheckCircle, AlertCircle, Globe, Zap } from 'lucide-react';
+import { FileIcon, X, CheckCircle, AlertCircle, Globe, Zap, Clock } from 'lucide-react';
 import useStore from '@/store/useStore';
 import { toast } from 'sonner';
 import { getCrustFilesDirectClient, type DirectUploadProgress } from '@/lib/crustfiles-direct';
@@ -29,15 +29,18 @@ export default function FileUpload({ file, onClose }: FileUploadProps) {
   const [status, setStatus] = useState<'uploading' | 'completed' | 'error'>('uploading');
   const [error, setError] = useState<string | null>(null);
   const [cid, setCid] = useState<string>('');
+  const [gateway, setGateway] = useState<string>('');
+  const [uploadStartTime, setUploadStartTime] = useState<number>(0);
 
   const addFile = useStore((state) => state.addFile);
   const updateFile = useStore((state) => state.updateFile);
   const deleteFile = useStore((state) => state.deleteFile);
   const fileExists = useStore((state) => state.fileExists);
+  const currentFolderId = useStore((state) => state.currentFolderId);
 
   useEffect(() => {
     uploadToCrust();
-  }, [file]);
+  }, [file, currentFolderId]);
 
   const uploadToCrust = async () => {
     // 检查文件是否已存在
@@ -68,9 +71,12 @@ export default function FileUpload({ file, onClose }: FileUploadProps) {
       uploadDate: new Date().toISOString(),
       status: 'uploading',
       progress: 0,
+      folderId: currentFolderId,
     });
 
     try {
+      setUploadStartTime(Date.now());
+      
       // 使用直连客户端上传文件
       const client = getCrustFilesDirectClient(token);
 
@@ -85,6 +91,7 @@ export default function FileUpload({ file, onClose }: FileUploadProps) {
       if (result.success) {
         setProgress(100);
         setCid(result.cid!);
+        setGateway(result.gateway || '');
 
         // 创建下载映射
         try {
@@ -107,7 +114,7 @@ export default function FileUpload({ file, onClose }: FileUploadProps) {
           url: result.url,
         });
 
-        toast.success(`${file.name} 已直接上传到 CrustFiles.io`);
+        toast.success(`${file.name} 已成功上传到 Crust Network`);
       } else {
         throw new Error(result.error || '上传失败');
       }
@@ -130,9 +137,15 @@ export default function FileUpload({ file, onClose }: FileUploadProps) {
     return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
   };
 
+  const getUploadTime = (): string => {
+    if (uploadStartTime === 0) return '0s';
+    const elapsed = Math.floor((Date.now() - uploadStartTime) / 1000);
+    return `${elapsed}s`;
+  };
+
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="crystal-dialog sm:max-w-md">
+      <DialogContent className="crystal-dialog sm:max-w-md" showCloseButton={false}>
         <DialogHeader>
           <DialogTitle className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -146,9 +159,26 @@ export default function FileUpload({ file, onClose }: FileUploadProps) {
             </Button>
           </DialogTitle>
           <DialogDescription>
-            {status === 'uploading' ? '正在上传到 CrustFiles.io...' : null}
-            {status === 'completed' ? '文件上传成功！' : null}
-            {status === 'error' ? error : null}
+            {status === 'uploading' && (
+              <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4 animate-spin" />
+                正在直连上传到 Crust Network...
+                {gateway && <span className="text-xs text-purple-500/70 ml-2">{gateway.replace('https://', '')}</span>}
+              </div>
+            )}
+            {status === 'completed' && (
+              <div className="flex items-center gap-2">
+                <Zap className="h-4 w-4 text-green-500/70" />
+                文件上传成功！
+                <span className="text-xs text-muted-foreground ml-2">{getUploadTime()}</span>
+              </div>
+            )}
+            {status === 'error' && (
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 text-red-400/70" />
+                {error}
+              </div>
+            )}
           </DialogDescription>
         </DialogHeader>
 
@@ -174,12 +204,25 @@ export default function FileUpload({ file, onClose }: FileUploadProps) {
             )}
           </div>
 
+          {/* 网关信息 */}
+          {gateway && (
+            <div className="p-3 crystal-card rounded-lg bg-gradient-to-r from-purple-50/80 to-pink-50/80">
+              <div className="flex items-center gap-2 text-sm">
+                <Globe className="h-4 w-4 text-purple-500/70" />
+                <span className="font-medium">使用网关</span>
+                <span className="text-xs bg-white/60 px-2 py-0.5 rounded-full">
+                  {gateway.replace('https://', '')}
+                </span>
+              </div>
+            </div>
+          )}
+
           {/* CID 信息 */}
           {cid && (
             <div className="p-4 crystal-card rounded-lg">
               <div className="flex items-center gap-2 text-sm mb-2">
                 <Globe className="h-4 w-4 text-purple-500/70" />
-                <span className="font-medium">CID</span>
+                <span className="font-medium">文件 CID</span>
               </div>
               <code className="text-xs break-all bg-purple-50/60 px-3 py-2 rounded block">
                 {cid}
@@ -203,16 +246,24 @@ export default function FileUpload({ file, onClose }: FileUploadProps) {
           {/* 操作按钮 */}
           <div className="flex justify-end gap-2">
             {status === 'completed' && (
-              <Button onClick={onClose} className="crystal-button text-white">关闭</Button>
+              <Button onClick={onClose} className="crystal-button text-white">
+                完成
+              </Button>
             )}
             {status === 'error' && (
               <>
-                <Button variant="outline" onClick={onClose} className="crystal-card">关闭</Button>
-                <Button onClick={uploadToCrust} className="crystal-button text-white">重试</Button>
+                <Button variant="outline" onClick={onClose} className="crystal-card">
+                  关闭
+                </Button>
+                <Button onClick={uploadToCrust} className="crystal-button text-white">
+                  重试
+                </Button>
               </>
             )}
             {status === 'uploading' && (
-              <Button variant="outline" onClick={onClose} className="crystal-card">取消</Button>
+              <Button variant="outline" onClick={onClose} className="crystal-card">
+                取消
+              </Button>
             )}
           </div>
         </div>

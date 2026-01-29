@@ -4,7 +4,7 @@ import { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Upload, Search, RefreshCw, Plus, LogOut, FileIcon, Tag as TagIcon, Globe, Menu, Settings } from 'lucide-react';
+import { Upload, Search, RefreshCw, Plus, LogOut, FileIcon, Tag as TagIcon, Globe, Menu, Settings, Zap } from 'lucide-react';
 import useStore from '@/store/useStore';
 import { toast } from 'sonner';
 import FileUpload from './FileUpload';
@@ -298,13 +298,23 @@ export default function Dashboard() {
             >
               <CardHeader>
                 <CardTitle className="flex items-center justify-between">
-                  <span>文件列表</span>
+                  <div className="flex items-center gap-2">
+                    <FileIcon className="h-4 w-4 text-purple-500/70" />
+                    <span>文件列表</span>
+                  </div>
                   <span className="text-sm font-normal text-muted-foreground">
                     {filteredFiles.length} 个文件
                   </span>
                 </CardTitle>
                 <CardDescription>
-                  {isDragging ? '松开鼠标以上传文件' : '拖拽文件到此处或点击上传按钮'}
+                  {isDragging ? (
+                    <span className="flex items-center gap-2 text-purple-500/80">
+                      <Zap className="h-4 w-4 animate-pulse" />
+                      松开鼠标以上传文件
+                    </span>
+                  ) : (
+                    <span>拖拽文件到此处或点击上传按钮</span>
+                  )}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -319,6 +329,13 @@ export default function Dashboard() {
                     <p className="text-muted-foreground text-sm max-w-sm">
                       开始上传文件或添加 CID 来使用 CrustShare 存储服务
                     </p>
+                    <Button
+                      onClick={handleUploadClick}
+                      className="mt-4 crystal-button text-white"
+                    >
+                      <Upload className="mr-2 h-4 w-4" />
+                      立即上传
+                    </Button>
                   </div>
                 ) : (
                   <FileList files={filteredFiles} />

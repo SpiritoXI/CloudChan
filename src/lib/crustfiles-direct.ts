@@ -1,6 +1,7 @@
 /**
  * CrustFiles.io 直连客户端
  * 直接连接到 CrustFiles.io API，绕过 Vercel 的请求体大小限制
+ * 基于 CloudChan 核心上传逻辑实现
  */
 
 export interface DirectUploadProgress {
@@ -26,18 +27,24 @@ export interface DirectUploadResult {
   gateway?: string; // 使用的网关
 }
 
-// 网关配置
+// 网关配置 - 基于 CloudChan 的全球加速网关列表
 export const GATEWAYS = {
   PRIMARY: 'https://gw.w3ipfs.org.cn', // 国内优选
   OFFICIAL: 'https://gw.crustfiles.app', // 官方主推
-  DEVELOPER: 'https://crustipfs.xyz' // 开发者/海外兜底
+  CLOUDFLARE: 'https://cloudflare-ipfs.com', // Cloudflare IPFS
+  IPFS_IO: 'https://ipfs.io', // IPFS.io 官方
+  PINATA: 'https://gateway.pinata.cloud', // Pinata 网关
+  CRUST_IPFS: 'https://crustipfs.xyz' // 开发者/海外兜底
 };
 
-// 网关优先级列表
+// 网关优先级列表 - 优化的全球访问策略
 export const GATEWAY_PRIORITY = [
   GATEWAYS.PRIMARY,
   GATEWAYS.OFFICIAL,
-  GATEWAYS.DEVELOPER
+  GATEWAYS.CLOUDFLARE,
+  GATEWAYS.IPFS_IO,
+  GATEWAYS.PINATA,
+  GATEWAYS.CRUST_IPFS
 ];
 
 class CrustFilesDirectClient {
@@ -116,7 +123,12 @@ class CrustFilesDirectClient {
 
     // 添加认证 Token
     if (this.authToken) {
-      headers.append('Authorization', `Bearer ${this.authToken}`);
+      // 支持 Bearer 和 Basic 两种认证格式
+      if (this.authToken.startsWith('Basic ')) {
+        headers.append('Authorization', this.authToken);
+      } else {
+        headers.append('Authorization', `Bearer ${this.authToken}`);
+      }
     }
 
     // 添加自定义 headers
@@ -205,7 +217,7 @@ class CrustFilesDirectClient {
       // 监听请求完成
       xhr.addEventListener('load', () => {
         const contentType = xhr.getResponseHeader('content-type') || '';
-        let data: any;
+        let data: { Hash?: string; cid?: string; Name?: string; name?: string; Size?: number; size?: number } | string;
 
         try {
           if (contentType.includes('application/json')) {
@@ -213,17 +225,19 @@ class CrustFilesDirectClient {
           } else {
             data = xhr.responseText;
           }
-        } catch (error) {
+        } catch {
           data = xhr.responseText;
         }
 
         if (xhr.status >= 200 && xhr.status < 300) {
+          // 处理 data 可能是 string 类型的情况
+          const jsonData = typeof data === 'string' ? {} : data;
           resolve({
             success: true,
-            cid: data.Hash || data.cid,
-            name: data.Name || data.name || file.name,
-            size: data.Size || data.size || file.size,
-            url: `${gateway}/ipfs/${data.Hash || data.cid}`,
+            cid: jsonData.Hash || jsonData.cid,
+            name: jsonData.Name || jsonData.name || file.name,
+            size: jsonData.Size || jsonData.size || file.size,
+            url: `${gateway}/ipfs/${jsonData.Hash || jsonData.cid}`,
           });
         } else {
           resolve({
@@ -325,7 +339,7 @@ class CrustFilesDirectClient {
   /**
    * 获取文件信息
    */
-  async getFileInfo(cid: string): Promise<any> {
+  async getFileInfo(cid: string): Promise<{ Hash?: string; Size?: number; CumulativeSize?: number; NumLinks?: number; BlockSize?: number }> {
     // 重置网关索引
     this.resetGateway();
     
@@ -354,7 +368,7 @@ class CrustFilesDirectClient {
   /**
    * 使用指定网关获取文件信息
    */
-  private async getFileInfoWithGateway(cid: string, gateway: string): Promise<any> {
+  private async getFileInfoWithGateway(cid: string, gateway: string): Promise<{ Hash?: string; Size?: number; CumulativeSize?: number; NumLinks?: number; BlockSize?: number }> {
     const url = this.buildUrl(`/api/v0/object/stat?arg=${cid}`, gateway);
     const requestHeaders = this.buildHeaders();
 
@@ -473,6 +487,73 @@ class CrustFilesDirectClient {
     } catch (error) {
       return false;
     }
+  }
+
+  /**
+   * 测试网关连接状态
+   */
+  async testGateway(gateway: string): Promise<{ success: boolean; latency?: number; error?: string }> {
+    const startTime = Date.now();
+    
+    const url = this.buildUrl('/api/v0/version', gateway);
+    const requestHeaders = this.buildHeaders();
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: requestHeaders,
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      const latency = Date.now() - startTime;
+      
+      if (response.ok) {
+        return {
+          success: true,
+          latency,
+        };
+      } else {
+        return {
+          success: false,
+          error: `HTTP ${response.status}`,
+        };
+      }
+    } catch (error) {
+      clearTimeout(timeoutId);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : '连接失败',
+      };
+    }
+  }
+
+  /**
+   * 批量测试所有网关
+   */
+  async testAllGateways(): Promise<Array<{ gateway: string; success: boolean; latency?: number; error?: string }>> {
+    const results = await Promise.all(
+      this.gateways.map(async (gateway) => {
+        const result = await this.testGateway(gateway);
+        return {
+          gateway,
+          ...result,
+        };
+      })
+    );
+
+    // 按成功率和延迟排序
+    return results.sort((a, b) => {
+      if (a.success && !b.success) return -1;
+      if (!a.success && b.success) return 1;
+      if (a.success && b.success) {
+        return (a.latency || 9999) - (b.latency || 9999);
+      }
+      return 0;
+    });
   }
 }
 
