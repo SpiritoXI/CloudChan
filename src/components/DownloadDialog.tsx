@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { X, Download, CheckCircle, AlertCircle, RefreshCw, CloudDownload } from 'lucide-react';
+import { X, Download, CheckCircle, AlertCircle, Globe, Copy } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface DownloadDialogProps {
@@ -30,7 +30,11 @@ export default function DownloadDialog({
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [downloadStatus, setDownloadStatus] = useState<'idle' | 'downloading' | 'completed' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
-  const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+
+  const handleCopyCID = () => {
+    navigator.clipboard.writeText(cid);
+    toast.success('CID 已复制到剪贴板');
+  };
 
   const handleDownload = async () => {
     setIsDownloading(true);
@@ -39,36 +43,21 @@ export default function DownloadDialog({
     setError(null);
 
     try {
-      // 调用下载 API 生成签名 URL
-      const response = await fetch('/api/download', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          fileKey: cid, // 使用 cid 作为 fileKey
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || '生成下载链接失败');
-      }
-
-      const data = await response.json();
-      setDownloadUrl(data.downloadUrl);
-
       // 模拟下载进度
       for (let i = 0; i <= 100; i += 10) {
         await new Promise((resolve) => setTimeout(resolve, 100));
         setDownloadProgress(i);
       }
 
-      // 使用 fetch + blob 模式下载
-      const fileResponse = await fetch(data.downloadUrl);
-      if (!fileResponse.ok) throw new Error('下载失败');
+      // 从 IPFS 网关下载（使用公开网关）
+      const ipfsGateway = `https://ipfs.io/ipfs/${cid}`;
+      const response = await fetch(ipfsGateway);
 
-      const blob = await fileResponse.blob();
+      if (!response.ok) {
+        throw new Error('从 IPFS 网关下载失败');
+      }
+
+      const blob = await response.blob();
       const blobUrl = window.URL.createObjectURL(blob);
 
       const link = document.createElement('a');
@@ -102,7 +91,7 @@ export default function DownloadDialog({
             </Button>
           </DialogTitle>
           <DialogDescription>
-            从对象存储下载文件
+            从 Crust Network / IPFS 下载文件
           </DialogDescription>
         </DialogHeader>
 
@@ -110,7 +99,7 @@ export default function DownloadDialog({
           {/* 文件信息 */}
           <div className="p-4 crystal-card rounded-lg space-y-2">
             <div className="flex items-center gap-2 text-sm">
-              <CloudDownload className="h-4 w-4 text-purple-500/70" />
+              <Globe className="h-4 w-4 text-purple-500/70" />
               <span className="font-medium">文件信息</span>
             </div>
             <div className="space-y-1 text-sm">
@@ -119,8 +108,20 @@ export default function DownloadDialog({
                 <span className="ml-1 font-medium">{fileName}</span>
               </div>
               <div>
-                <span className="text-muted-foreground">文件 Key：</span>
-                <span className="ml-1 font-mono text-xs break-all">{cid}</span>
+                <span className="text-muted-foreground">CID：</span>
+                <div className="ml-1 flex items-center gap-2">
+                  <code className="text-xs break-all bg-purple-50/60 px-2 py-1 rounded flex-1">
+                    {cid}
+                  </code>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleCopyCID}
+                    className="h-6 w-6 crystal-icon"
+                  >
+                    <Copy className="h-3 w-3" />
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
@@ -167,7 +168,6 @@ export default function DownloadDialog({
                   关闭
                 </Button>
                 <Button onClick={handleDownload} className="crystal-button text-white">
-                  <RefreshCw className="mr-2 h-4 w-4" />
                   重试
                 </Button>
               </>

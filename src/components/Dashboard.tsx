@@ -4,11 +4,10 @@ import { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Upload, Search, RefreshCw, Plus, LogOut, FileIcon, Tag as TagIcon, Globe, HardDrive, Menu } from 'lucide-react';
-import useStore from '@/store/useStore';
+import { Upload, Search, RefreshCw, Plus, LogOut, FileIcon, Tag as TagIcon, Globe, Menu } from 'lucide-react';
+import useStore from '@/store/useStore');
 import { toast } from 'sonner';
 import FileUpload from './FileUpload';
-import CrustFileUpload from './CrustFileUpload';
 import FileList from './FileList';
 import AddCidDialog from './AddCidDialog';
 import StorageStats from './StorageStats';
@@ -23,7 +22,6 @@ export default function Dashboard() {
   const [showTagManager, setShowTagManager] = useState(false);
   const [showMoveDialog, setShowMoveDialog] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [uploadMethod, setUploadMethod] = useState<'s3' | 'crust'>('s3');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const files = useStore((state) => state.files);
@@ -231,30 +229,7 @@ export default function Dashboard() {
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base">文件操作</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-3">
-                  {/* 上传方式选择 */}
-                  <div className="flex gap-2">
-                    <Button
-                      variant={uploadMethod === 's3' ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => setUploadMethod('s3')}
-                      className={`flex-1 ${uploadMethod === 's3' ? 'crystal-button text-white' : 'crystal-card'}`}
-                    >
-                      <HardDrive className="mr-2 h-4 w-4" />
-                      对象存储
-                    </Button>
-                    <Button
-                      variant={uploadMethod === 'crust' ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => setUploadMethod('crust')}
-                      className={`flex-1 ${uploadMethod === 'crust' ? 'crystal-button text-white' : 'crystal-card'}`}
-                    >
-                      <Globe className="mr-2 h-4 w-4" />
-                      Crust Network
-                    </Button>
-                  </div>
-
-                  {/* 上传和添加 CID 按钮 */}
+                <CardContent>
                   <div className="flex gap-2">
                     <Input
                       ref={fileInputRef}
@@ -264,7 +239,7 @@ export default function Dashboard() {
                     />
                     <Button onClick={handleUploadClick} className="crystal-button flex-1 text-white">
                       <Upload className="mr-2 h-4 w-4" />
-                      上传
+                      上传文件
                     </Button>
                     <Button variant="outline" onClick={() => setShowAddCid(true)} className="crystal-card">
                       <Plus className="mr-2 h-4 w-4" />
@@ -316,20 +291,8 @@ export default function Dashboard() {
       </div>
 
       {/* 文件上传对话框 */}
-      {selectedFile && uploadMethod === 's3' && (
+      {selectedFile && (
         <FileUpload
-          file={selectedFile}
-          onClose={() => {
-            setSelectedFile(null);
-            if (fileInputRef.current) {
-              fileInputRef.current.value = '';
-            }
-          }}
-        />
-      )}
-
-      {selectedFile && uploadMethod === 'crust' && (
-        <CrustFileUpload
           file={selectedFile}
           onClose={() => {
             setSelectedFile(null);
