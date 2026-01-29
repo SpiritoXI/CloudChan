@@ -44,6 +44,31 @@ cd crustshare
 pnpm install
 ```
 
+### 2.5. 配置环境变量
+
+```bash
+# 复制示例配置
+cp .env.example .env
+
+# 使用脚本生成配置
+node scripts/generate-config.js
+```
+
+编辑 `.env` 文件，配置必要的变量：
+
+```env
+# Upstash Redis 配置（可选，用于生产环境）
+UPSTASH_REDIS_REST_URL=https://your-redis-url.upstash.io
+UPSTASH_REDIS_REST_TOKEN=your-redis-token
+
+# 密码配置（必须）
+PASSWORD_HASH=your_password_hash
+ADMIN_PASSWORD_HASH=your_admin_password_hash
+
+# JWT 配置（必须）
+CRUST_JWT_SECRET=your_jwt_secret
+```
+
 ### 3. 启动开发服务器
 
 ```bash
@@ -300,15 +325,26 @@ sudo certbot --nginx -d your-domain.com
 
 ## 环境变量配置
 
-### .env.local
+### 必需的环境变量
 
-在项目根目录创建 `.env.local` 文件：
+在部署前，必须配置以下环境变量：
 
-```bash
-# Crust Network API（可选）
-CRUST_API_KEY=your_api_key
-CRUST_API_ENDPOINT=https://api.crust.network
+```env
+# Upstash Redis 配置（推荐生产环境）
+UPSTASH_REDIS_REST_URL=https://your-redis-url.upstash.io
+UPSTASH_REDIS_REST_TOKEN=your-redis-token
 
+# 密码配置（必须 - SHA-256 哈希值）
+PASSWORD_HASH=5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8
+ADMIN_PASSWORD_HASH=8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918
+
+# JWT 配置（必须）
+CRUST_JWT_SECRET=your-jwt-secret-key-here
+```
+
+### 可选的环境变量
+
+```env
 # 应用配置
 NEXT_PUBLIC_APP_NAME=CrustShare
 NEXT_PUBLIC_APP_URL=https://your-domain.com
@@ -317,11 +353,40 @@ NEXT_PUBLIC_APP_URL=https://your-domain.com
 NODE_ENV=production
 ```
 
+### 生成配置
+
+使用提供的脚本快速生成配置：
+
+```bash
+node scripts/generate-config.js
+```
+
+脚本将引导你：
+1. 输入用户和管理员密码
+2. 自动生成 SHA-256 哈希值
+3. 生成随机 JWT 密钥
+
+### Upstash Redis 配置
+
+Upstash Redis 用于：
+- 会话管理
+- 文件元数据持久化
+- 缓存管理
+
+**获取 Redis 配置**：
+
+1. 访问 [Upstash Console](https://console.upstash.com/)
+2. 创建新的 Redis 数据库
+3. 复制 REST URL 和 Token
+
+**注意**：如果未配置 Upstash Redis，应用将使用 localStorage（仅适用于开发/单用户场景）。
+
 ### 重要说明
 
-- `.env.local` 文件不会提交到 Git
+- `.env` 文件不会提交到 Git（已在 `.gitignore` 中）
 - 生产环境应该通过云平台的环境变量配置
-- API 密钥等敏感信息必须通过环境变量管理
+- API 密钥、密码哈希等敏感信息必须通过环境变量管理
+- 定期轮换 JWT 密钥和密码
 
 ---
 

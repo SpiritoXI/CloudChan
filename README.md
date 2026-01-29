@@ -39,11 +39,53 @@
 
 ```bash
 # 克隆仓库
-git clone https://github.com/your-username/crustshare.git
+git clone https://github.com/SpiritoXI/crustshare.git
 cd crustshare
 
 # 安装依赖
 pnpm install
+```
+
+### 配置环境变量
+
+使用提供的脚本生成配置：
+
+```bash
+node scripts/generate-config.js
+```
+
+或手动创建 `.env` 文件：
+
+```bash
+cp .env.example .env
+```
+
+然后编辑 `.env` 文件，配置以下变量：
+
+```env
+# Upstash Redis 配置（可选，用于会话管理）
+UPSTASH_REDIS_REST_URL=https://your-redis-url.upstash.io
+UPSTASH_REDIS_REST_TOKEN=your-redis-token
+
+# 密码配置（SHA-256 哈希值）
+# 默认密码：crustshare
+PASSWORD_HASH=5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8
+
+# 管理员密码（默认：admin）
+ADMIN_PASSWORD_HASH=8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918
+
+# JWT 配置（用于会话认证）
+CRUST_JWT_SECRET=your-jwt-secret-key-here
+```
+
+**生成密码哈希**：
+
+```bash
+# 使用脚本生成
+node scripts/generate-config.js
+
+# 或使用命令行
+echo -n "your_password" | sha256sum
 ```
 
 ### 开发
@@ -189,15 +231,31 @@ docker run -p 5000:5000 crustshare
 
 ### 环境变量
 
-```bash
-# Crust Network API（可选）
-CRUST_API_KEY=your_api_key
-CRUST_API_ENDPOINT=https://api.crust.network
+```env
+# Upstash Redis 配置（推荐用于生产环境）
+UPSTASH_REDIS_REST_URL=https://your-redis-url.upstash.io
+UPSTASH_REDIS_REST_TOKEN=your-redis-token
 
-# 对象存储（已移除，不再需要）
-# COZE_BUCKET_ENDPOINT_URL=xxx
-# COZE_BUCKET_NAME=xxx
+# 密码配置（必须）
+PASSWORD_HASH=your_password_hash
+ADMIN_PASSWORD_HASH=your_admin_password_hash
+
+# JWT 配置（必须）
+CRUST_JWT_SECRET=your_jwt_secret
+
+# 应用配置（可选）
+NEXT_PUBLIC_APP_NAME=CrustShare
+NEXT_PUBLIC_APP_URL=https://your-domain.com
+
+# 环境模式（可选）
+NODE_ENV=production
 ```
+
+**配置说明**：
+
+1. **Upstash Redis**：用于会话管理和文件元数据持久化。如果未配置，将使用 localStorage（仅适用于开发/单用户场景）。
+2. **密码哈希**：必须配置。使用 `node scripts/generate-config.js` 生成。
+3. **JWT Secret**：用于生成和验证 JWT 令牌。使用脚本生成随机密钥。
 
 ---
 
