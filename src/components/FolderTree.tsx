@@ -11,7 +11,7 @@ import {
 import { Folder, FolderOpen, ChevronRight, ChevronDown, MoreVertical, Plus, Edit2, Trash2, FolderPlus } from 'lucide-react';
 import useStore from '@/store/useStore';
 import { toast } from 'sonner';
-import FolderDialog from './dialogs/FolderDialog';
+import FolderDialog from './DialogFolder';
 import { Folder as FolderType } from '@/store/useStore';
 
 export default function FolderTree() {
