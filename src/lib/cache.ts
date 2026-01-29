@@ -50,40 +50,24 @@ class LocalCache {
       .filter((key) => key.startsWith(this.prefix))
       .forEach((key) => localStorage.removeItem(key));
   }
-
-  // 检查缓存是否存在且有效
-  has(key: string): boolean {
-    return this.get(key) !== null;
-  }
-
-  // 支持通配符删除（用于删除匹配前缀的缓存）
-  deleteByPrefix(prefix: string): void {
-    Object.keys(localStorage)
-      .filter((key) => key.startsWith(this.prefix + prefix))
-      .forEach((key) => localStorage.removeItem(key));
-  }
 }
 
-// 导出单例
 export const cache = new LocalCache();
 
 // 缓存键常量
 export const CacheKeys = {
-  FILES: 'files',
-  FOLDERS: 'folders',
-  TAGS: 'tags',
-  USER_PREFERENCES: 'user_preferences',
+  GATEWAY_HEALTH: 'gateway_health',
+  GATEWAY_STATE: 'gateway_state',
   GATEWAY_STATES: 'gateway_states',
   GATEWAY_MAPPING: 'gateway_mapping',
-  GATEWAY_HEALTH: 'gateway_health',
-} as const;
+  FILE_METADATA: 'file_metadata',
+};
 
-// 缓存过期时间（毫秒）
+// 缓存 TTL 常量（毫秒）
 export const CacheTTL = {
   SHORT: 5 * 60 * 1000, // 5 分钟
-  MEDIUM: 30 * 60 * 1000, // 30 分钟
-  LONG: 24 * 60 * 60 * 1000, // 24 小时
-  GATEWAY_STATE: 10 * 60 * 1000, // 10 分钟
-  GATEWAY_MAPPING: 24 * 60 * 60 * 1000, // 24 小时
-  GATEWAY_HEALTH: 1 * 60 * 1000, // 1 分钟
-} as const;
+  MEDIUM: 15 * 60 * 1000, // 15 分钟
+  LONG: 60 * 60 * 1000, // 1 小时
+  GATEWAY_STATE: 30 * 60 * 1000, // 30 分钟
+  GATEWAY_MAPPING: 7 * 24 * 60 * 60 * 1000, // 7 天
+};

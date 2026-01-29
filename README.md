@@ -73,20 +73,24 @@ cp .env.example .env
 CRUSTFILES_ACCESS_TOKEN=your_crustfiles_access_token_here
 CRUSTFILES_BASE_URL=https://crustfiles.io
 
+# Access Token 配置（用于用户认证）
+# 生成随机 Token: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+ACCESS_TOKEN=your-access-token-here
+
+# CrustFiles.io 配置（文件上传和下载）
+CRUSTFILES_ACCESS_TOKEN=your_crustfiles_access_token_here
+CRUSTFILES_BASE_URL=https://crustfiles.io
+
 # Upstash Redis 配置（可选，用于会话管理）
 UPSTASH_REDIS_REST_URL=https://your-redis-url.upstash.io
 UPSTASH_REDIS_REST_TOKEN=your-redis-token
-
-# 密码配置（SHA-256 哈希值）
-# 默认密码：crustshare
-PASSWORD_HASH=5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8
 ```
 
-**生成密码哈希**：
+**生成 Access Token**：
 
 ```bash
 # 使用命令行
-echo -n "your_password" | sha256sum
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
 ### 开发
@@ -158,7 +162,7 @@ crustshare/
 
 #### 1. 用户认证
 
-基于密码哈希的认证系统：
+基于 Access Token 的认证系统：
 
 ```typescript
 // 登录验证
@@ -166,13 +170,13 @@ const response = await fetch('/api/auth/login', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
-    password: 'crustshare'
+    accessToken: 'your-access-token'
   })
 });
 ```
 
-- **密码加密**：SHA-256 哈希
-- **会话存储**：localStorage 或 Upstash Redis
+- **Access Token**：安全的令牌认证
+- **会话存储**：localStorage
 - **单用户模式**：简化认证，无需角色管理
 
 #### 2. CrustFiles.io 代理（正向代理）
@@ -384,18 +388,23 @@ docker run -p 5000:5000 crustshare
 ### 环境变量
 
 ```env
-# Upstash Redis 配置（推荐用于生产环境）
+# Access Token 配置（必须）
+ACCESS_TOKEN=your-access-token-here
+
+# CrustFiles.io 配置（必须）
+CRUSTFILES_ACCESS_TOKEN=your_crustfiles_access_token_here
+CRUSTFILES_BASE_URL=https://crustfiles.io
+
+# Upstash Redis 配置（可选，用于生产环境会话管理）
 UPSTASH_REDIS_REST_URL=https://your-redis-url.upstash.io
 UPSTASH_REDIS_REST_TOKEN=your-redis-token
-
-# 密码配置（必须）
-PASSWORD_HASH=your_password_hash
 ```
 
 **配置说明**：
 
-1. **Upstash Redis**：用于会话管理和文件元数据持久化。如果未配置，将使用 localStorage（仅适用于开发/单用户场景）。
-2. **密码哈希**：必须配置。使用 `echo -n "your_password" | sha256sum` 生成。
+1. **Access Token**：必须配置。使用 `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` 生成。
+2. **CrustFiles.io**：必须配置。访问 [CrustFiles.io](https://crustfiles.io/) 获取 Access Token。
+3. **Upstash Redis**：用于会话管理和文件元数据持久化。如果未配置，将使用 localStorage（仅适用于开发/单用户场景）。
 
 ---
 

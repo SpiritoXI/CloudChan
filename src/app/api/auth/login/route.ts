@@ -1,27 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyPasswordHash, getPasswordHash } from '@/lib/auth';
+import { verifyAccessToken } from '@/lib/auth';
 
 /**
  * 登录 API 路由
- * 验证用户密码
+ * 验证用户 Access Token
  */
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { password } = body;
+    const { accessToken } = body;
 
-    if (!password) {
+    if (!accessToken) {
       return NextResponse.json(
-        { success: false, error: '密码不能为空' },
+        { success: false, error: 'Access Token 不能为空' },
         { status: 400 }
       );
     }
 
-    // 获取正确的哈希值
-    const correctHash = getPasswordHash();
-
-    // 验证密码
-    const isValid = verifyPasswordHash(password, correctHash);
+    // 验证 Access Token
+    const isValid = verifyAccessToken(accessToken);
 
     if (isValid) {
       return NextResponse.json({
@@ -30,7 +27,7 @@ export async function POST(request: NextRequest) {
       });
     } else {
       return NextResponse.json(
-        { success: false, error: '密码错误' },
+        { success: false, error: 'Access Token 无效' },
         { status: 401 }
       );
     }
