@@ -7,7 +7,8 @@
 ## 目录
 
 - [认证 API](#认证-api)
-- [文件上传 API](#文件上传-api)
+- [文件上传 API (CrustFiles.io)](#文件上传-api-crustfilesio)
+- [文件上传 API (Crust Network)](#文件上传-api-crust-network)
 - [存储状态 API](#存储状态-api)
 - [错误处理](#错误处理)
 

@@ -69,8 +69,8 @@ export default function FileUpload({ file, onClose }: FileUploadProps) {
         }
       }, 200);
 
-      // 调用 Crust Network 上传 API
-      const response = await fetch('/api/crust/upload', {
+      // 调用 CrustFiles.io 上传 API
+      const response = await fetch('/api/crustfiles/upload', {
         method: 'POST',
         body: formData,
       });
@@ -95,7 +95,7 @@ export default function FileUpload({ file, onClose }: FileUploadProps) {
         cid: data.cid,
       });
 
-      toast.success(`${file.name} 已上传到 Crust Network`);
+      toast.success(`${file.name} 已上传到 CrustFiles.io`);
     } catch (err) {
       setStatus('error');
       setError(err instanceof Error ? err.message : '上传失败，请重试');
@@ -111,7 +111,7 @@ export default function FileUpload({ file, onClose }: FileUploadProps) {
     const k = 1024;
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
   };
 
   return (
@@ -130,7 +130,7 @@ export default function FileUpload({ file, onClose }: FileUploadProps) {
             </Button>
           </DialogTitle>
           <DialogDescription>
-            {status === 'uploading' ? '正在上传到 Crust Network...' : null}
+            {status === 'uploading' ? '正在上传到 CrustFiles.io...' : null}
             {status === 'completed' ? '文件上传成功！' : null}
             {status === 'error' ? error : null}
           </DialogDescription>

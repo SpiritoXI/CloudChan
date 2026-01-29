@@ -49,9 +49,9 @@ export default function DownloadDialog({
         setDownloadProgress(i);
       }
 
-      // 从 IPFS 网关下载（使用公开网关）
-      const ipfsGateway = `https://ipfs.io/ipfs/${cid}`;
-      const response = await fetch(ipfsGateway);
+      // 从 CrustFiles.io 网关下载
+      const crustfilesGateway = `https://crustfiles.io/ipfs/${cid}`;
+      const response = await fetch(crustfilesGateway);
 
       if (!response.ok) {
         throw new Error('从 IPFS 网关下载失败');
@@ -91,7 +91,7 @@ export default function DownloadDialog({
             </Button>
           </DialogTitle>
           <DialogDescription>
-            从 Crust Network / IPFS 下载文件
+            从 CrustFiles.io 下载文件
           </DialogDescription>
         </DialogHeader>
 

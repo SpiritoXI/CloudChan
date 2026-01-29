@@ -63,6 +63,11 @@ cp .env.example .env
 然后编辑 `.env` 文件，配置以下变量：
 
 ```env
+# CrustFiles.io 配置（文件上传和下载）
+# 访问 https://crustfiles.io/ 获取 Access Token
+CRUSTFILES_ACCESS_TOKEN=your_crustfiles_access_token_here
+CRUSTFILES_BASE_URL=https://crustfiles.io
+
 # Upstash Redis 配置（可选，用于会话管理）
 UPSTASH_REDIS_REST_URL=https://your-redis-url.upstash.io
 UPSTASH_REDIS_REST_TOKEN=your-redis-token
