@@ -214,7 +214,7 @@ export const uploadApi = {
       });
 
       xhr.open("POST", CONFIG.CRUST_UPLOAD_API);
-      xhr.setRequestHeader("Authorization", token);
+      xhr.setRequestHeader("Authorization", `Bearer ${token}`);
       xhr.send(formData);
     });
   },
