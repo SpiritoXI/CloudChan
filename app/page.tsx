@@ -51,10 +51,11 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
+      const hashedPassword = await hashPassword(password);
       const response = await fetch("/api/verify-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password: hashPassword(password) }),
+        body: JSON.stringify({ password: hashedPassword }),
       });
 
       if (response.ok) {

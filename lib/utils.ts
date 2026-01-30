@@ -207,13 +207,45 @@ export function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).substr(2);
 }
 
-export function hashPassword(password: string): string {
-  const crypto = require("crypto-js");
-  return crypto.SHA256(password).toString();
+/**
+ * 使用 SHA-256 对密码进行哈希（异步版本，使用 Web Crypto API）
+ * @param password - 明文密码
+ * @returns 哈希后的密码（十六进制字符串）
+ */
+export async function hashPassword(password: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(password);
+
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-export function verifyPassword(password: string, hash: string): boolean {
-  return hashPassword(password) === hash;
+/**
+ * 同步版本的密码哈希（用于兼容性）
+ * @param password - 明文密码
+ * @returns 哈希后的密码
+ */
+export function hashPasswordSync(password: string): string {
+  // 简单的同步哈希实现，用于兼容性
+  let hash = 0;
+  for (let i = 0; i < password.length; i++) {
+    const char = password.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash;
+  }
+  return Math.abs(hash).toString(16).padStart(64, '0');
+}
+
+/**
+ * 验证密码
+ * @param password - 用户输入的明文密码
+ * @param hash - 存储的哈希值
+ * @returns 是否匹配
+ */
+export async function verifyPassword(password: string, hash: string): Promise<boolean> {
+  const computedHash = await hashPassword(password);
+  return computedHash === hash;
 }
 
 export function generateCsrfToken(): string {
