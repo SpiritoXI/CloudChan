@@ -90,7 +90,7 @@ export async function onRequestPost(context: Context): Promise<Response> {
     } catch (parseError) {
       console.error('JSON parse error:', parseError);
       return new Response(
-        JSON.stringify({ error: "请求格式错误：无法解析 JSON" } as ApiResponse),
+        JSON.stringify({ success: false, error: "请求格式错误：无法解析 JSON" } as ApiResponse),
         { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
@@ -100,7 +100,7 @@ export async function onRequestPost(context: Context): Promise<Response> {
     if (!expectedPasswordHash) {
       console.error('ADMIN_PASSWORD_HASH not set');
       return new Response(
-        JSON.stringify({ error: "服务器配置错误：未设置 ADMIN_PASSWORD_HASH" } as ApiResponse),
+        JSON.stringify({ success: false, error: "服务器配置错误：未设置 ADMIN_PASSWORD_HASH" } as ApiResponse),
         { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
@@ -108,7 +108,7 @@ export async function onRequestPost(context: Context): Promise<Response> {
     // 输入验证
     if (!password || typeof password !== 'string') {
       return new Response(
-        JSON.stringify({ error: "密码格式不正确" } as ApiResponse),
+        JSON.stringify({ success: false, error: "密码格式不正确" } as ApiResponse),
         { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
@@ -116,7 +116,7 @@ export async function onRequestPost(context: Context): Promise<Response> {
     // 密码长度验证（支持明文或哈希值）
     if (password.length < 1 || password.length > 128) {
       return new Response(
-        JSON.stringify({ error: "密码长度不合法" } as ApiResponse),
+        JSON.stringify({ success: false, error: "密码长度不合法" } as ApiResponse),
         { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
@@ -141,7 +141,7 @@ export async function onRequestPost(context: Context): Promise<Response> {
       await new Promise(resolve => setTimeout(resolve, 500));
 
       return new Response(
-        JSON.stringify({ error: "密码错误" } as ApiResponse),
+        JSON.stringify({ success: false, error: "密码错误" } as ApiResponse),
         {
           status: 401,
           headers: {
@@ -156,7 +156,7 @@ export async function onRequestPost(context: Context): Promise<Response> {
     console.error('密码验证错误:', error);
     const errorMessage = error instanceof Error ? error.message : '未知错误';
     return new Response(
-      JSON.stringify({ error: "请求处理失败", details: errorMessage } as ApiResponse),
+      JSON.stringify({ success: false, error: "请求处理失败", message: errorMessage } as ApiResponse),
       { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
   }
