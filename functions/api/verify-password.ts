@@ -60,6 +60,20 @@ async function verifyPassword(password: string, hash: string): Promise<boolean> 
   return result === 0;
 }
 
+// CORS 响应头
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+};
+
+export async function onRequestOptions(): Promise<Response> {
+  return new Response(null, {
+    status: 204,
+    headers: corsHeaders,
+  });
+}
+
 export async function onRequestPost(context: Context): Promise<Response> {
   const { request, env } = context;
 
@@ -71,7 +85,7 @@ export async function onRequestPost(context: Context): Promise<Response> {
     if (!expectedPasswordHash) {
       return new Response(
         JSON.stringify({ error: "服务器配置错误：未设置 ADMIN_PASSWORD_HASH" } as ApiResponse),
-        { status: 500, headers: { "Content-Type": "application/json" } }
+        { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
 
@@ -79,7 +93,7 @@ export async function onRequestPost(context: Context): Promise<Response> {
     if (!password || typeof password !== 'string') {
       return new Response(
         JSON.stringify({ error: "密码格式不正确" } as ApiResponse),
-        { status: 400, headers: { "Content-Type": "application/json" } }
+        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
 
@@ -87,7 +101,7 @@ export async function onRequestPost(context: Context): Promise<Response> {
     if (password.length < 1 || password.length > 128) {
       return new Response(
         JSON.stringify({ error: "密码长度不合法" } as ApiResponse),
-        { status: 400, headers: { "Content-Type": "application/json" } }
+        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
 
@@ -101,7 +115,8 @@ export async function onRequestPost(context: Context): Promise<Response> {
           status: 200,
           headers: {
             "Content-Type": "application/json",
-            "Cache-Control": "no-store, no-cache, must-revalidate"
+            "Cache-Control": "no-store, no-cache, must-revalidate",
+            ...corsHeaders
           }
         }
       );
@@ -115,7 +130,8 @@ export async function onRequestPost(context: Context): Promise<Response> {
           status: 401,
           headers: {
             "Content-Type": "application/json",
-            "Cache-Control": "no-store, no-cache, must-revalidate"
+            "Cache-Control": "no-store, no-cache, must-revalidate",
+            ...corsHeaders
           }
         }
       );
@@ -124,7 +140,7 @@ export async function onRequestPost(context: Context): Promise<Response> {
     console.error('密码验证错误:', error);
     return new Response(
       JSON.stringify({ error: "请求处理失败" } as ApiResponse),
-      { status: 400, headers: { "Content-Type": "application/json" } }
+      { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
   }
 }
