@@ -5,6 +5,19 @@ import { Providers } from "./providers";
 export const metadata: Metadata = {
   title: "CrustShare - 去中心化文件存储与分享",
   description: "基于Crust Network和IPFS的去中心化文件存储与分享平台",
+  icons: {
+    icon: [
+      { url: '/favicon.ico', sizes: '32x32' },
+      { url: '/favicon-16x16.png', sizes: '16x16', type: 'image/png' },
+      { url: '/favicon-32x32.png', sizes: '32x32', type: 'image/png' },
+      { url: '/favicon-48x48.png', sizes: '48x48', type: 'image/png' },
+    ],
+    apple: [
+      { url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' },
+    ],
+    shortcut: ['/favicon.ico'],
+  },
+  manifest: '/manifest.json',
 };
 
 export default function RootLayout({

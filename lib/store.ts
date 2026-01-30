@@ -26,8 +26,8 @@ interface FileState {
   itemsPerPage: number;
   isLoading: boolean;
   storageStats: StorageStats;
-  setFiles: (files: FileRecord[]) => void;
-  setFolders: (folders: Folder[]) => void;
+  setFiles: (files: FileRecord[] | ((prev: FileRecord[]) => FileRecord[])) => void;
+  setFolders: (folders: Folder[] | ((prev: Folder[]) => Folder[])) => void;
   addFile: (file: FileRecord) => void;
   updateFile: (id: string | number, updates: Partial<FileRecord>) => void;
   deleteFile: (id: string | number) => void;
@@ -176,12 +176,26 @@ export const useFileStore = create<FileState>()((set, get) => ({
   storageStats: { totalFiles: 0, totalFolders: 0, totalSize: 0 },
 
   setFiles: (files) => {
-    set({ files });
+    if (typeof files === "function") {
+      set((state) => {
+        const newFiles = files(state.files);
+        return { files: newFiles };
+      });
+    } else {
+      set({ files });
+    }
     get().updateStorageStats();
   },
 
   setFolders: (folders) => {
-    set({ folders });
+    if (typeof folders === "function") {
+      set((state) => {
+        const newFolders = folders(state.folders);
+        return { folders: newFolders };
+      });
+    } else {
+      set({ folders });
+    }
     get().updateStorageStats();
   },
 

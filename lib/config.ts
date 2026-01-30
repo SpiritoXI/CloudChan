@@ -8,6 +8,8 @@ export const APP = {
 export const CONFIG = {
   API_DB_PROXY: "/api/db_proxy",
   API_GET_TOKEN: "/api/get_token",
+  API_SHARE: "/api/share",
+  API_VERIFY_SHARE_PASSWORD: "/api/verify-share-password",
 
   CRUST_UPLOAD_API: "https://gw.crustfiles.app/api/v0/add?pin=true",
 

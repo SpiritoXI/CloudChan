@@ -48,9 +48,14 @@ export function getFileIcon(filename: string): string {
     avi: "🎬",
     mov: "🎬",
     mkv: "🎬",
+    webm: "🎬",
+    ogv: "🎬",
     mp3: "🎵",
     wav: "🎵",
     flac: "🎵",
+    ogg: "🎵",
+    aac: "🎵",
+    m4a: "🎵",
     zip: "📦",
     rar: "📦",
     "7z": "📦",
@@ -67,6 +72,95 @@ export function getFileIcon(filename: string): string {
     txt: "📃",
   };
   return iconMap[ext] || "📎";
+}
+
+// 视频文件扩展名列表
+const VIDEO_EXTENSIONS = new Set([
+  "mp4", "webm", "ogv", "ogg", "mov", "qt", "m4v", "mkv", "avi", "flv", "wmv", "mpg", "mpeg"
+]);
+
+// 音频文件扩展名列表
+const AUDIO_EXTENSIONS = new Set([
+  "mp3", "wav", "flac", "aac", "m4a", "ogg", "oga", "opus", "weba", "wma"
+]);
+
+// 媒体文件MIME类型映射
+const MEDIA_MIME_TYPES: Record<string, string> = {
+  // 视频
+  mp4: "video/mp4",
+  webm: "video/webm",
+  ogv: "video/ogg",
+  ogg: "video/ogg",
+  mov: "video/quicktime",
+  qt: "video/quicktime",
+  m4v: "video/mp4",
+  mkv: "video/x-matroska",
+  avi: "video/x-msvideo",
+  flv: "video/x-flv",
+  wmv: "video/x-ms-wmv",
+  mpg: "video/mpeg",
+  mpeg: "video/mpeg",
+  // 音频
+  mp3: "audio/mpeg",
+  wav: "audio/wav",
+  flac: "audio/flac",
+  aac: "audio/aac",
+  m4a: "audio/mp4",
+  oga: "audio/ogg",
+  opus: "audio/opus",
+  weba: "audio/webm",
+  wma: "audio/x-ms-wma",
+};
+
+export function isVideoFile(filename: string): boolean {
+  const ext = getFileExtension(filename);
+  return VIDEO_EXTENSIONS.has(ext);
+}
+
+export function isAudioFile(filename: string): boolean {
+  const ext = getFileExtension(filename);
+  return AUDIO_EXTENSIONS.has(ext);
+}
+
+export function isMediaFile(filename: string): boolean {
+  return isVideoFile(filename) || isAudioFile(filename);
+}
+
+export function getMediaMimeType(filename: string): string {
+  const ext = getFileExtension(filename);
+  return MEDIA_MIME_TYPES[ext] || (isVideoFile(filename) ? "video/mp4" : "audio/mpeg");
+}
+
+// 图片文件扩展名列表
+const IMAGE_EXTENSIONS = new Set([
+  "jpg", "jpeg", "png", "gif", "webp", "svg", "bmp", "ico", "tiff", "tif", "avif", "heic", "heif"
+]);
+
+// 图片文件MIME类型映射
+const IMAGE_MIME_TYPES: Record<string, string> = {
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  gif: "image/gif",
+  webp: "image/webp",
+  svg: "image/svg+xml",
+  bmp: "image/bmp",
+  ico: "image/x-icon",
+  tiff: "image/tiff",
+  tif: "image/tiff",
+  avif: "image/avif",
+  heic: "image/heic",
+  heif: "image/heif",
+};
+
+export function isImageFile(filename: string): boolean {
+  const ext = getFileExtension(filename);
+  return IMAGE_EXTENSIONS.has(ext);
+}
+
+export function getImageMimeType(filename: string): string {
+  const ext = getFileExtension(filename);
+  return IMAGE_MIME_TYPES[ext] || "image/jpeg";
 }
 
 export function isValidCID(cid: string): boolean {
