@@ -4,10 +4,12 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prebuild": "node scripts/generate-env.js",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "generate-env": "node scripts/generate-env.js"
   },
   "dependencies": {
     "@radix-ui/react-alert-dialog": "^1.0.5",
