@@ -518,34 +518,37 @@ export const gatewayApi = {
   async testAllGateways(gateways: Gateway[]): Promise<Gateway[]> {
     const results: Gateway[] = [];
     const maxConcurrency = CONFIG.GATEWAY_TEST.CONCURRENT_LIMIT;
-    const executing: Promise<void>[] = [];
 
-    for (const gateway of gateways) {
-      const testPromise = (async () => {
-        const result = await this.testGateway(gateway);
-        results.push({
-          ...gateway,
-          available: result.available,
-          latency: result.latency,
-          lastChecked: Date.now(),
+    // 使用队列方式控制并发
+    const queue = [...gateways];
+    const executing: Set<Promise<void>> = new Set();
+
+    const processGateway = async (gateway: Gateway): Promise<void> => {
+      const result = await this.testGateway(gateway);
+      results.push({
+        ...gateway,
+        available: result.available,
+        latency: result.latency,
+        lastChecked: Date.now(),
+      });
+    };
+
+    // 持续处理直到队列为空且所有任务完成
+    while (queue.length > 0 || executing.size > 0) {
+      // 启动新任务直到达到并发上限或队列为空
+      while (executing.size < maxConcurrency && queue.length > 0) {
+        const gateway = queue.shift()!;
+        const promise = processGateway(gateway).finally(() => {
+          executing.delete(promise);
         });
-      })();
+        executing.add(promise);
+      }
 
-      executing.push(testPromise);
-
-      // 当并发数达到上限时，等待最快的完成
-      if (executing.length >= maxConcurrency) {
+      // 等待任意一个任务完成
+      if (executing.size > 0) {
         await Promise.race(executing);
-        // 清理已完成的 Promise
-        const index = executing.findIndex(p => p === testPromise);
-        if (index > -1) {
-          executing.splice(index, 1);
-        }
       }
     }
-
-    // 等待所有剩余的测试完成
-    await Promise.all(executing);
 
     return results.sort((a, b) => {
       if (a.available !== b.available) return a.available ? -1 : 1;
@@ -580,13 +583,21 @@ export const gatewayApi = {
   },
 
   // 自动检测网关（带缓存机制）
-  async autoTestGateways(customGateways: Gateway[] = []): Promise<Gateway[]> {
-    // 先检查缓存
-    const cached = this.getCachedResults();
-    if (cached && cached.length > 0) {
-      const availableCount = cached.filter(g => g.available).length;
-      if (availableCount > 0) {
-        return cached;
+  async autoTestGateways(customGateways: Gateway[] = [], forceRefresh: boolean = false): Promise<Gateway[]> {
+    // 先检查缓存（除非强制刷新）
+    if (!forceRefresh) {
+      const cached = this.getCachedResults();
+      if (cached && cached.length > 0) {
+        // 验证缓存中的网关是否包含当前所有默认网关
+        const cachedUrls = new Set(cached.map(g => g.url));
+        const defaultUrls = CONFIG.DEFAULT_GATEWAYS.map(g => g.url);
+        const hasAllDefaults = defaultUrls.every(url => cachedUrls.has(url));
+        
+        // 只有当缓存包含所有默认网关且有可用网关时才使用缓存
+        const availableCount = cached.filter(g => g.available).length;
+        if (availableCount > 0 && hasAllDefaults) {
+          return cached;
+        }
       }
     }
 

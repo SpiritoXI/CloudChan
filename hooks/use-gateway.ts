@@ -163,10 +163,17 @@ export function useGateway(): GatewayState & GatewayOperations {
       // 检查缓存
       const cached = gatewayApi.getCachedResults();
       if (cached && cached.length > 0) {
-        setGateways(cached);
-        const availableCount = cached.filter(g => g.available).length;
-        if (availableCount > 0) {
-          return; // 有可用网关，不需要重新测试
+        // 验证缓存是否包含所有默认网关
+        const cachedUrls = new Set(cached.map(g => g.url));
+        const defaultUrls = gateways.map(g => g.url);
+        const hasAllDefaults = defaultUrls.every(url => cachedUrls.has(url));
+        
+        if (hasAllDefaults) {
+          setGateways(cached);
+          const availableCount = cached.filter(g => g.available).length;
+          if (availableCount > 0) {
+            return; // 有可用网关且缓存完整，不需要重新测试
+          }
         }
       }
       
@@ -175,6 +182,7 @@ export function useGateway(): GatewayState & GatewayOperations {
     };
 
     init();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return {
