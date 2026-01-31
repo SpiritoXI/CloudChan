@@ -14,6 +14,13 @@ import {
   AlertCircle,
   RefreshCw,
   Loader2,
+  Globe,
+  Check,
+  Signal,
+  SignalHigh,
+  SignalMedium,
+  SignalLow,
+  ChevronUp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
@@ -43,12 +50,28 @@ export function MediaPlayer({ cid, filename, gateways, onGatewaySwitch }: MediaP
   const audioRef = useRef<HTMLAudioElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const hideControlsTimeoutRef = useRef<NodeJS.Timeout>();
+  const gatewayMenuRef = useRef<HTMLDivElement>(null);
 
   const [currentGatewayIndex, setCurrentGatewayIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showControls, setShowControls] = useState(true);
+  const [showGatewayMenu, setShowGatewayMenu] = useState(false);
   const [availableGateways, setAvailableGateways] = useState<Gateway[]>([]);
+
+  // 点击外部关闭网关选择菜单
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (gatewayMenuRef.current && !gatewayMenuRef.current.contains(event.target as Node)) {
+        setShowGatewayMenu(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
 
   const [playerState, setPlayerState] = useState<PlayerState>({
     isPlaying: false,
@@ -84,7 +107,29 @@ export function MediaPlayer({ cid, filename, gateways, onGatewaySwitch }: MediaP
 
   const mediaRef = isVideo ? videoRef : audioRef;
 
-  // 切换网关
+  // 切换到指定网关
+  const switchToGateway = useCallback((index: number) => {
+    if (index === currentGatewayIndex) {
+      setShowGatewayMenu(false);
+      return;
+    }
+
+    setCurrentGatewayIndex(index);
+    setError(null);
+    setIsLoading(true);
+    setShowGatewayMenu(false);
+
+    const nextGateway = availableGateways[index];
+    onGatewaySwitch?.(nextGateway);
+
+    // 重新加载媒体
+    const media = isVideo ? videoRef.current : audioRef.current;
+    if (media) {
+      media.load();
+    }
+  }, [availableGateways, currentGatewayIndex, onGatewaySwitch, isVideo]);
+
+  // 切换到下一个网关
   const switchToNextGateway = useCallback(() => {
     if (availableGateways.length <= 1) {
       setError("所有网关都无法播放此媒体文件");
@@ -92,13 +137,16 @@ export function MediaPlayer({ cid, filename, gateways, onGatewaySwitch }: MediaP
     }
 
     const nextIndex = (currentGatewayIndex + 1) % availableGateways.length;
-    setCurrentGatewayIndex(nextIndex);
-    setError(null);
-    setIsLoading(true);
+    switchToGateway(nextIndex);
+  }, [availableGateways, currentGatewayIndex, switchToGateway]);
 
-    const nextGateway = availableGateways[nextIndex];
-    onGatewaySwitch?.(nextGateway);
-  }, [availableGateways, currentGatewayIndex, onGatewaySwitch]);
+  // 获取信号强度图标
+  const getSignalIcon = (latency: number | undefined) => {
+    if (!latency || latency === Infinity) return <Signal className="h-3 w-3 text-slate-400" />;
+    if (latency < 500) return <SignalHigh className="h-3 w-3 text-green-400" />;
+    if (latency < 1500) return <SignalMedium className="h-3 w-3 text-yellow-400" />;
+    return <SignalLow className="h-3 w-3 text-red-400" />;
+  };
 
   // 重试当前网关
   const retryCurrentGateway = useCallback(() => {
@@ -429,10 +477,79 @@ export function MediaPlayer({ cid, filename, gateways, onGatewaySwitch }: MediaP
             </div>
           </div>
 
-          {/* 网关信息 */}
-          {currentGateway && (
-            <div className="text-xs text-slate-500 text-center">
-              当前网关: {currentGateway.name} ({currentGateway.latency}ms)
+          {/* 网关选择 */}
+          {availableGateways.length > 0 && (
+            <div className="flex items-center justify-center" ref={gatewayMenuRef}>
+              <div className="relative">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowGatewayMenu(!showGatewayMenu)}
+                  className="text-slate-400 hover:text-white text-xs flex items-center space-x-1"
+                >
+                  <Globe className="h-3 w-3" />
+                  <span>{currentGateway?.name || `网关 ${currentGatewayIndex + 1}`}</span>
+                  {currentGateway?.latency && currentGateway.latency !== Infinity && (
+                    <span className="text-slate-500">({currentGateway.latency}ms)</span>
+                  )}
+                  <ChevronUp className="h-3 w-3 ml-1" />
+                </Button>
+
+                {/* 网关选择菜单 */}
+                <AnimatePresence>
+                  {showGatewayMenu && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 bg-slate-800 rounded-lg shadow-xl border border-slate-700 overflow-hidden z-50"
+                    >
+                      <div className="p-2 border-b border-slate-700">
+                        <p className="text-xs text-slate-400 font-medium">选择网关</p>
+                      </div>
+                      <div className="max-h-48 overflow-y-auto">
+                        {availableGateways.map((gateway, index) => (
+                          <button
+                            key={gateway.url}
+                            onClick={() => switchToGateway(index)}
+                            className={`w-full px-3 py-2 flex items-center justify-between text-left hover:bg-slate-700 transition-colors ${
+                              index === currentGatewayIndex ? 'bg-slate-700/50' : ''
+                            }`}
+                          >
+                            <div className="flex items-center space-x-2">
+                              <span className="text-lg">{gateway.icon || '🌐'}</span>
+                              <div>
+                                <p className="text-sm text-white">{gateway.name}</p>
+                                <p className="text-xs text-slate-400 truncate max-w-[120px]">
+                                  {gateway.url.replace('/ipfs/', '')}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center space-x-1">
+                              {getSignalIcon(gateway.latency)}
+                              {index === currentGatewayIndex && (
+                                <Check className="h-3 w-3 text-blue-400 ml-1" />
+                              )}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                      {availableGateways.length > 1 && (
+                        <div className="p-2 border-t border-slate-700">
+                          <button
+                            onClick={switchToNextGateway}
+                            className="w-full px-3 py-1.5 text-xs text-slate-300 hover:text-white hover:bg-slate-700 rounded transition-colors flex items-center justify-center space-x-1"
+                          >
+                            <RefreshCw className="h-3 w-3" />
+                            <span>自动切换下一个</span>
+                          </button>
+                        </div>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             </div>
           )}
         </div>
@@ -512,12 +629,79 @@ export function MediaPlayer({ cid, filename, gateways, onGatewaySwitch }: MediaP
             <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-start">
               <div>
                 <h3 className="text-white font-medium truncate max-w-md">{filename}</h3>
-                {currentGateway && (
-                  <p className="text-slate-400 text-xs">
-                    {currentGateway.name} · {currentGateway.latency}ms
-                  </p>
-                )}
               </div>
+              {/* 网关选择 */}
+              {availableGateways.length > 0 && (
+                <div className="relative" ref={gatewayMenuRef}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowGatewayMenu(!showGatewayMenu)}
+                    className="text-white hover:bg-white/20 text-xs flex items-center space-x-1"
+                  >
+                    <Globe className="h-3 w-3" />
+                    <span>{currentGateway?.name || `网关 ${currentGatewayIndex + 1}`}</span>
+                    {currentGateway?.latency && currentGateway.latency !== Infinity && (
+                      <span className="text-slate-400">({currentGateway.latency}ms)</span>
+                    )}
+                  </Button>
+
+                  {/* 网关选择菜单 */}
+                  <AnimatePresence>
+                    {showGatewayMenu && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                        transition={{ duration: 0.15 }}
+                        className="absolute top-full right-0 mt-2 w-64 bg-slate-800 rounded-lg shadow-xl border border-slate-700 overflow-hidden z-50"
+                      >
+                        <div className="p-2 border-b border-slate-700">
+                          <p className="text-xs text-slate-400 font-medium">选择网关</p>
+                        </div>
+                        <div className="max-h-48 overflow-y-auto">
+                          {availableGateways.map((gateway, index) => (
+                            <button
+                              key={gateway.url}
+                              onClick={() => switchToGateway(index)}
+                              className={`w-full px-3 py-2 flex items-center justify-between text-left hover:bg-slate-700 transition-colors ${
+                                index === currentGatewayIndex ? 'bg-slate-700/50' : ''
+                              }`}
+                            >
+                              <div className="flex items-center space-x-2">
+                                <span className="text-lg">{gateway.icon || '🌐'}</span>
+                                <div>
+                                  <p className="text-sm text-white">{gateway.name}</p>
+                                  <p className="text-xs text-slate-400 truncate max-w-[120px]">
+                                    {gateway.url.replace('/ipfs/', '')}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex items-center space-x-1">
+                                {getSignalIcon(gateway.latency)}
+                                {index === currentGatewayIndex && (
+                                  <Check className="h-3 w-3 text-blue-400 ml-1" />
+                                )}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                        {availableGateways.length > 1 && (
+                          <div className="p-2 border-t border-slate-700">
+                            <button
+                              onClick={switchToNextGateway}
+                              className="w-full px-3 py-1.5 text-xs text-slate-300 hover:text-white hover:bg-slate-700 rounded transition-colors flex items-center justify-center space-x-1"
+                            >
+                              <RefreshCw className="h-3 w-3" />
+                              <span>自动切换下一个</span>
+                            </button>
+                          </div>
+                        )}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              )}
             </div>
 
             {/* 中央播放按钮 */}

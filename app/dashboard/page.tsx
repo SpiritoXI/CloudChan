@@ -191,7 +191,14 @@ export default function DashboardPage() {
         onUploadClick={() => fileInputRef.current?.click()}
         onAddCidClick={() => setAddCidModalOpen(true)}
         onTestGateways={handleTestGateways}
-        onFolderSelect={setCurrentFolderId}
+        onFolderSelect={(folderId) => {
+          setCurrentFolderId(folderId);
+          // 当点击"全部文件"时，重置其他筛选状态
+          if (folderId === null) {
+            setIsRecentUploads(false);
+            setIsMyShares(false);
+          }
+        }}
         onCreateFolder={() => {
           setEditingFolder(null);
           setNewFolderName("");
