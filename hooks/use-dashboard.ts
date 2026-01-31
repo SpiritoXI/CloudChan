@@ -199,6 +199,35 @@ export function useDashboard() {
             const updatedFiles = [fileRecord, ...files];
             setFiles(updatedFiles);
             showToast(`文件 ${safeName} 上传成功`, "success");
+
+            // 后台快速验证文件完整性
+            uploadApi.verifyFile(result.cid).then((verifyResult) => {
+              const verifiedFile: FileRecord = {
+                ...fileRecord,
+                verified: verifyResult.verified,
+                verify_status: verifyResult.status,
+                verify_message: verifyResult.message,
+              };
+
+              // 更新本地状态
+              setFiles((prev) =>
+                prev.map((f) => (f.id === fileRecord.id ? verifiedFile : f))
+              );
+
+              // 保存验证结果到服务器
+              api.saveFile(verifiedFile).catch((err) => {
+                console.error("保存验证结果失败:", err);
+              });
+
+              // 可选：根据验证结果显示提示
+              if (verifyResult.verified) {
+                console.log(`文件 ${safeName} 完整性验证通过`);
+              } else if (verifyResult.status === "failed") {
+                console.warn(`文件 ${safeName} 完整性验证失败:`, verifyResult.message);
+              }
+            }).catch((err) => {
+              console.error("文件验证过程出错:", err);
+            });
           } catch {
             showToast(`文件 ${file.name} 上传失败`, "error");
           }
@@ -578,44 +607,57 @@ export function useDashboard() {
 
     try {
       let name = newCidName.trim();
-      // 优先使用用户手动输入的size，如果没有输入则默认为0
       const userInputSize = newCidSize ? (parseInt(newCidSize) || 0) : 0;
       let size = userInputSize;
 
-      // 如果用户没有输入文件名，尝试从IPFS获取
-      if (!name) {
-        setIsDetectingCid(true);
-        try {
-          const metadata = await api.fetchCidInfo(newCid);
-          if (metadata?.name) {
-            name = metadata.name;
-          }
-          if (!userInputSize && metadata?.size) {
-            size = metadata.size;
-          }
-        } catch {
-          // 获取失败时使用CID作为文件名
-          name = newCid.substring(0, 10) + "...";
-        } finally {
-          setIsDetectingCid(false);
+      // 检测CID信息和验证
+      setIsDetectingCid(true);
+      let metadata: { name: string; size: number; isDirectory: boolean; valid: boolean; error?: string } | null = null;
+      try {
+        metadata = await api.fetchCidInfo(newCid);
+
+        // 如果CID格式无效，显示错误
+        if (metadata && !metadata.valid) {
+          showToast(metadata.error || "无效的CID格式", "error");
+          return;
         }
+
+        // 如果用户没有输入文件名，使用检测到的名称
+        if (!name && metadata?.name) {
+          name = metadata.name;
+        }
+
+        // 如果用户没有输入大小，使用检测到的大小
+        if (!userInputSize && metadata?.size) {
+          size = metadata.size;
+        }
+
+        // 如果检测有警告信息，显示提示
+        if (metadata?.error) {
+          showToast(metadata.error, "warning");
+        }
+      } catch {
+        // 检测失败但继续添加
+        showToast("无法自动检测文件信息，请手动填写", "warning");
+      } finally {
+        setIsDetectingCid(false);
       }
 
       // 如果用户没有输入文件名，使用默认名称
       if (!name) {
-        name = newCid.substring(0, 10) + "...";
+        name = `file-${newCid.slice(0, 8)}`;
       }
 
       const fileRecord: FileRecord = {
         id: generateId(),
         name,
         size,
-        cid: newCid,
+        cid: newCid.trim(),
         date: new Date().toLocaleString(),
         folder_id: currentFolderId || "default",
         hash: "",
         verified: false,
-        verify_status: "pending",
+        verify_status: metadata?.valid ? "ok" : "pending",
         uploadedAt: Date.now(),
       };
 

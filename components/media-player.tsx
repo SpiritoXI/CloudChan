@@ -66,12 +66,13 @@ export function MediaPlayer({ cid, filename, gateways, onGatewaySwitch }: MediaP
   const mediaType = isVideo ? "video" : "audio";
   const mimeType = getMediaMimeType(filename);
 
-  // 获取可用网关列表
+  // 获取可用网关列表 - 如果没有可用网关，使用所有网关作为备选
   useEffect(() => {
     const available = gateways
       .filter((g) => g.available)
       .sort((a, b) => (a.latency || Infinity) - (b.latency || Infinity));
-    setAvailableGateways(available);
+    // 如果没有可用网关，使用所有网关作为备选
+    setAvailableGateways(available.length > 0 ? available : gateways);
   }, [gateways]);
 
   // 获取当前媒体URL

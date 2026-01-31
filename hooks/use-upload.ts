@@ -6,9 +6,9 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { api, uploadApi } from "@/lib/api";
+import { api, uploadApi, propagationApi } from "@/lib/api";
 import { CONFIG } from "@/lib/config";
-import { useFileStore, useUIStore } from "@/lib/store";
+import { useFileStore, useUIStore, useGatewayStore } from "@/lib/store";
 import { generateId } from "@/lib/utils";
 import { isAllowedFileType, isSafeFilename, sanitizeFilename } from "@/lib/security";
 import { handleError } from "@/lib/error-handler";
@@ -37,6 +37,7 @@ export function useUpload(options: UseUploadOptions): UploadState & UploadOperat
   const { currentFolderId, onUploadSuccess } = options;
   const { files, setFiles } = useFileStore();
   const { showToast } = useUIStore();
+  const { gateways } = useGatewayStore();
   
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -124,7 +125,49 @@ export function useUpload(options: UseUploadOptions): UploadState & UploadOperat
             await api.saveFile(fileRecord);
             setFiles((prev) => [fileRecord, ...prev]);
             showToast(`文件 ${safeName} 上传成功`, "success");
-            
+
+            // 后台静默传播文件到其他网关，不阻塞主流程
+            if (gateways.length > 0) {
+              propagationApi.backgroundPropagate(result.cid, gateways, {
+                maxGateways: 8,
+                timeout: 15000,
+                onComplete: (propResult) => {
+                  if (propResult.success.length > 0) {
+                    console.log(`文件已传播到 ${propResult.success.length} 个网关`);
+                  }
+                },
+              });
+            }
+
+            // 后台快速验证文件完整性
+            uploadApi.verifyFile(result.cid).then((verifyResult) => {
+              const updatedFile: FileRecord = {
+                ...fileRecord,
+                verified: verifyResult.verified,
+                verify_status: verifyResult.status,
+                verify_message: verifyResult.message,
+              };
+
+              // 更新本地状态
+              setFiles((prev) =>
+                prev.map((f) => (f.id === fileRecord.id ? updatedFile : f))
+              );
+
+              // 保存验证结果到服务器
+              api.saveFile(updatedFile).catch((err) => {
+                console.error("保存验证结果失败:", err);
+              });
+
+              // 可选：根据验证结果显示提示
+              if (verifyResult.verified) {
+                console.log(`文件 ${safeName} 完整性验证通过`);
+              } else if (verifyResult.status === "failed") {
+                console.warn(`文件 ${safeName} 完整性验证失败:`, verifyResult.message);
+              }
+            }).catch((err) => {
+              console.error("文件验证过程出错:", err);
+            });
+
             onUploadSuccess?.(fileRecord);
           } catch (error) {
             if (error instanceof Error && error.name === 'AbortError') {
@@ -143,7 +186,7 @@ export function useUpload(options: UseUploadOptions): UploadState & UploadOperat
         setAbortController(null);
       }
     },
-    [currentFolderId, setFiles, showToast, validateFile, onUploadSuccess]
+    [currentFolderId, setFiles, showToast, validateFile, onUploadSuccess, gateways]
   );
 
   // 拖拽处理

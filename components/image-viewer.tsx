@@ -53,26 +53,29 @@ export function ImageViewer({ cid, filename, gateways, onClose, onDownload }: Im
     dragStart: { x: 0, y: 0 },
   });
 
-  // 获取可用网关列表
+  // 获取可用网关列表 - 如果没有可用网关，使用所有网关作为备选
   const availableGateways = gateways
     .filter((g) => g.available)
     .sort((a, b) => (a.latency || Infinity) - (b.latency || Infinity));
 
+  // 如果没有可用网关，使用所有网关作为备选
+  const effectiveGateways = availableGateways.length > 0 ? availableGateways : gateways;
+
   // 获取当前图片URL
   const getCurrentImageUrl = useCallback(() => {
-    if (availableGateways.length === 0) return null;
-    const gateway = availableGateways[currentGatewayIndex];
+    if (effectiveGateways.length === 0) return null;
+    const gateway = effectiveGateways[currentGatewayIndex];
     return `${gateway.url}${cid}`;
-  }, [availableGateways, currentGatewayIndex, cid]);
+  }, [effectiveGateways, currentGatewayIndex, cid]);
 
   // 切换网关
   const switchToNextGateway = useCallback(() => {
-    if (availableGateways.length <= 1) {
+    if (effectiveGateways.length <= 1) {
       setError("所有网关都无法加载此图片");
       return;
     }
 
-    const nextIndex = (currentGatewayIndex + 1) % availableGateways.length;
+    const nextIndex = (currentGatewayIndex + 1) % effectiveGateways.length;
     setCurrentGatewayIndex(nextIndex);
     setError(null);
     setIsLoading(true);
@@ -85,7 +88,7 @@ export function ImageViewer({ cid, filename, gateways, onClose, onDownload }: Im
       isDragging: false,
       dragStart: { x: 0, y: 0 },
     });
-  }, [availableGateways, currentGatewayIndex]);
+  }, [effectiveGateways, currentGatewayIndex]);
 
   // 缩放控制
   const zoomIn = useCallback(() => {
@@ -210,7 +213,7 @@ export function ImageViewer({ cid, filename, gateways, onClose, onDownload }: Im
   }, [onClose, zoomIn, zoomOut, resetZoom, rotate, toggleFullscreen, isFullscreen]);
 
   const currentUrl = getCurrentImageUrl();
-  const currentGateway = availableGateways[currentGatewayIndex];
+  const currentGateway = effectiveGateways[currentGatewayIndex];
 
   if (!currentUrl) {
     return (
