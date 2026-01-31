@@ -346,16 +346,34 @@ export function useDashboard() {
     setIsFetchingPublicGateways(true);
     try {
       const publicGateways = await gatewayApi.fetchPublicGateways();
-      const allGateways = [...gateways, ...publicGateways];
+
+      if (publicGateways.length === 0) {
+        showToast("未获取到新的公共网关", "info");
+        return;
+      }
+
+      // 检测新获取的公共网关
+      setIsTestingGateways(true);
+      showToast(`获取到 ${publicGateways.length} 个公共网关，正在检测...`, "info");
+
+      const testedPublicGateways = await gatewayApi.testAllGateways(publicGateways);
+
+      // 合并网关，去重
+      const allGateways = [...gateways, ...testedPublicGateways];
       const uniqueGateways = allGateways.filter(
         (gateway, index, self) => index === self.findIndex((g) => g.url === gateway.url)
       );
+
       setGateways(uniqueGateways);
-      showToast("公共网关获取成功", "success");
+      gatewayApi.cacheResults(uniqueGateways);
+
+      const availableCount = testedPublicGateways.filter(g => g.available).length;
+      showToast(`公共网关获取完成，${availableCount} 个可用`, "success");
     } catch {
       showToast("获取公共网关失败", "error");
     } finally {
       setIsFetchingPublicGateways(false);
+      setIsTestingGateways(false);
     }
   }, [gateways, setGateways, showToast]);
 
@@ -429,9 +447,15 @@ export function useDashboard() {
 
   // Handle download
   const handleDownload = useCallback(
-    (cid: string, filename: string) => {
-      // 实现下载逻辑
-      showToast(`开始下载 ${filename}`, "success");
+    async (cid: string, filename: string) => {
+      try {
+        const { url } = await gatewayApi.getBestGatewayUrl();
+        const downloadUrl = `${url}${cid}?filename=${encodeURIComponent(filename)}&download=true`;
+        window.open(downloadUrl, '_blank');
+        showToast(`开始下载 ${filename}`, "success");
+      } catch {
+        showToast(`下载 ${filename} 失败`, "error");
+      }
     },
     [showToast]
   );
@@ -439,8 +463,14 @@ export function useDashboard() {
   // Handle download file record
   const handleDownloadFile = useCallback(
     async (file: FileRecord) => {
-      // 实现下载逻辑
-      showToast(`开始下载 ${file.name}`, "success");
+      try {
+        const { url } = await gatewayApi.getBestGatewayUrl();
+        const downloadUrl = `${url}${file.cid}?filename=${encodeURIComponent(file.name)}&download=true`;
+        window.open(downloadUrl, '_blank');
+        showToast(`开始下载 ${file.name}`, "success");
+      } catch {
+        showToast(`下载 ${file.name} 失败`, "error");
+      }
     },
     [showToast]
   );
@@ -448,8 +478,9 @@ export function useDashboard() {
   // Handle download with gateway
   const handleDownloadWithGateway = useCallback(
     (cid: string, filename: string, gateway: any) => {
-      // 实现指定网关下载逻辑
-      showToast(`使用指定网关下载 ${filename}`, "success");
+      const downloadUrl = `${gateway.url}${cid}?filename=${encodeURIComponent(filename)}&download=true`;
+      window.open(downloadUrl, '_blank');
+      showToast(`使用 ${gateway.name} 下载 ${filename}`, "success");
     },
     [showToast]
   );
