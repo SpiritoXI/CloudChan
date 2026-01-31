@@ -1,16 +1,13 @@
-import type { ApiResponse } from "../../types";
-
-interface Env {
-  ADMIN_PASSWORD: string;
-}
-
-interface Context {
-  request: Request;
-  env: Env;
-}
+import type { ApiResponse, Env } from "../../types";
 
 interface VerifyPasswordBody {
   password: string;
+}
+
+// 定义密码验证特定的 Context 类型
+interface PasswordContext {
+  request: Request;
+  env: Pick<Env, "ADMIN_PASSWORD">;
 }
 
 // CORS 响应头
@@ -27,7 +24,7 @@ export async function onRequestOptions(): Promise<Response> {
   });
 }
 
-export async function onRequestPost(context: Context): Promise<Response> {
+export async function onRequestPost(context: PasswordContext): Promise<Response> {
   const { request, env } = context;
 
   try {

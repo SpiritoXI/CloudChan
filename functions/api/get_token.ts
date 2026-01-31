@@ -1,19 +1,9 @@
-import type { ApiResponse } from "../../types";
-
-interface Env {
-  ADMIN_PASSWORD: string;
-  CRUST_TOKEN: string;
-}
-
-interface Context {
-  request: Request;
-  env: Env;
-}
+import type { ApiResponse, Env, Context } from "../../types";
 
 /**
  * 验证认证 - 使用明文密码
  */
-async function verifyAuth(request: Request, env: Env): Promise<boolean> {
+async function verifyAuth(request: Request, env: Pick<Env, "ADMIN_PASSWORD">): Promise<boolean> {
   const authHeader = request.headers.get("x-auth-token");
 
   if (!authHeader) {

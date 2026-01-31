@@ -21,15 +21,7 @@ import { isImageFile, isMediaFile, isVideoFile } from "@/lib/utils";
 // 加载状态
 function LoadingState() {
   return (
-    <div
-      className="min-h-screen flex items-center justify-center"
-      style={{
-        backgroundImage: "url('https://wp-cdn.4ce.cn/v2/O1FmUhC.jpeg')",
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-        backgroundRepeat: "no-repeat",
-      }}
-    >
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center">
       <motion.div
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
@@ -45,15 +37,7 @@ function LoadingState() {
 // 静态占位符
 function StaticPlaceholder() {
   return (
-    <div
-      className="min-h-screen flex items-center justify-center"
-      style={{
-        backgroundImage: "url('https://wp-cdn.4ce.cn/v2/O1FmUhC.jpeg')",
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-        backgroundRepeat: "no-repeat",
-      }}
-    >
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center">
       <div className="text-center">
         <p className="text-slate-600 dark:text-slate-400">分享页面</p>
         <p className="text-sm text-slate-500 dark:text-slate-500 mt-2">请通过分享链接访问</p>
@@ -100,15 +84,7 @@ function SharePageContent({ cid }: { cid: string }) {
   const isMedia = isMediaFile(shareInfo?.filename || "");
 
   return (
-    <div
-      className="min-h-screen"
-      style={{
-        backgroundImage: "url('https://wp-cdn.4ce.cn/v2/O1FmUhC.jpeg')",
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-        backgroundRepeat: "no-repeat",
-      }}
-    >
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
       <ShareHeader />
 
       <main className="max-w-6xl mx-auto px-4 py-8">

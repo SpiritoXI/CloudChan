@@ -1,18 +1,7 @@
-import type { FileRecord, Folder, ApiResponse } from "../../types";
+import type { FileRecord, Folder, ApiResponse, Env, Context } from "../../types";
 
 const FILES_KEY = "my_crust_files";
 const FOLDERS_KEY = "cc_folders";
-
-interface Env {
-  UPSTASH_URL: string;
-  UPSTASH_TOKEN: string;
-  ADMIN_PASSWORD: string;
-}
-
-interface Context {
-  request: Request;
-  env: Env;
-}
 
 async function upstashCommand<T = unknown>(
   upstashUrl: string,

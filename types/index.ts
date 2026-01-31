@@ -98,6 +98,9 @@ export interface ApiResponse<T = unknown> {
   message?: string;
 }
 
+// 从 env.d.ts 重新导出环境变量类型
+export type { Env, Context } from "./env.d";
+
 export interface PaginatedResponse<T> {
   items: T[];
   total: number;

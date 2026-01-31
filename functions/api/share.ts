@@ -1,17 +1,6 @@
-import type { ApiResponse } from "../../types";
+import type { ApiResponse, Env, Context } from "../../types";
 
 const SHARES_KEY = "crustshare_shares";
-
-interface Env {
-  UPSTASH_URL: string;
-  UPSTASH_TOKEN: string;
-  ADMIN_PASSWORD: string;
-}
-
-interface Context {
-  request: Request;
-  env: Env;
-}
 
 interface ShareInfo {
   cid: string;
