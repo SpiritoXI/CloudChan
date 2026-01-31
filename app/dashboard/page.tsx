@@ -174,7 +174,15 @@ export default function DashboardPage() {
   if (!isAuthenticated) return null;
 
   return (
-    <div className="flex h-screen bg-gradient-to-br from-slate-50 via-purple-50 to-blue-50">
+    <div
+      className="flex h-screen"
+      style={{
+        backgroundImage: "url('https://wp-cdn.4ce.cn/v2/O1FmUhC.jpeg')",
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        backgroundRepeat: "no-repeat",
+      }}
+    >
       {/* Sidebar */}
       <Sidebar
         totalSize={totalSize}
