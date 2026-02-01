@@ -183,8 +183,7 @@ export function useDashboard() {
             };
 
             await api.saveFile(fileRecord);
-            const updatedFiles = [fileRecord, ...files];
-            setFiles(updatedFiles);
+            setFiles((prev) => [fileRecord, ...prev]);
             showToast(`文件 ${safeName} 上传成功`, "success");
 
             // 后台快速验证文件完整性
@@ -226,7 +225,7 @@ export function useDashboard() {
         setUploadProgress(0);
       }
     },
-    [currentFolderId, files, showToast]
+    [currentFolderId, showToast]
   );
 
   // Handle file delete
