@@ -662,17 +662,6 @@ export const gatewayApi = {
     };
   },
 
-  // 当前正在进行的网关检测 AbortController
-  private currentTestAbortController: AbortController | null = null;
-
-  // 取消当前网关检测
-  cancelGatewayTest(): void {
-    if (this.currentTestAbortController) {
-      this.currentTestAbortController.abort();
-      this.currentTestAbortController = null;
-    }
-  }
-
   async testAllGateways(
     gateways: Gateway[],
     options: {
