@@ -136,42 +136,8 @@ export function useDashboard() {
         setIsLoading(false);
       }
 
-      // 登录后自动检测网关（在后台静默执行，不阻塞文件列表加载）
-      // 检查缓存是否过期或是否需要重新检测
-      const shouldTestGateways = !cachedGateways ||
-        cachedGateways.length === 0 ||
-        (cachedGateways[0]?.lastChecked &&
-          Date.now() - cachedGateways[0].lastChecked > 5 * 60 * 1000);
-
-      if (shouldTestGateways) {
-        // 创建新的 AbortController
-        const abortController = new AbortController();
-        gatewayTestAbortControllerRef.current = abortController;
-
-        setIsTestingGateways(true);
-        
-        // 使用 Promise 确保 finally 块一定会执行
-        gatewayApi.testAllGateways(CONFIG.DEFAULT_GATEWAYS, {
-          signal: abortController.signal,
-        })
-        .then(results => {
-          setGateways(results);
-          gatewayApi.cacheResults(results);
-          const availableCount = results.filter(g => g.available).length;
-          showToast(`网关检测完成，${availableCount} 个可用`, "success");
-        })
-        .catch(error => {
-          if (error instanceof Error && error.name !== 'AbortError') {
-            console.error("自动网关检测失败", error);
-          }
-        })
-        .finally(() => {
-          setIsTestingGateways(false);
-          if (gatewayTestAbortControllerRef.current === abortController) {
-            gatewayTestAbortControllerRef.current = null;
-          }
-        });
-      }
+      // 注：已取消仪表盘自动检测网关功能
+      // 如需手动检测网关，请使用网关管理模态框中的检测按钮
     };
 
     loadData();
