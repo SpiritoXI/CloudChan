@@ -39,6 +39,9 @@ export interface Gateway {
   region: 'CN' | 'INTL';
   latency?: number;
   available?: boolean;
+  reliability?: number;
+  corsEnabled?: boolean;
+  rangeSupport?: boolean;
   healthScore?: number;
   lastChecked?: number;
   failureCount?: number;

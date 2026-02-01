@@ -6,7 +6,6 @@ import {
   Upload,
   Folder,
   FolderOpen,
-  Share2,
   Globe,
   LogOut,
   Plus,
@@ -34,10 +33,6 @@ interface SidebarProps {
   onEditFolder: (folder: FolderType) => void;
   onDeleteFolder: (folderId: string) => void;
   onLogout: () => void;
-  onRecentUploadsClick?: () => void;
-  isRecentUploadsActive?: boolean;
-  onMySharesClick?: () => void;
-  isMySharesActive?: boolean;
 }
 
 export function Sidebar({
@@ -56,10 +51,6 @@ export function Sidebar({
   onEditFolder,
   onDeleteFolder,
   onLogout,
-  onRecentUploadsClick,
-  isRecentUploadsActive,
-  onMySharesClick,
-  isMySharesActive,
 }: SidebarProps) {
   return (
     <motion.aside
@@ -104,22 +95,6 @@ export function Sidebar({
           >
             <Folder className="mr-2 h-4 w-4" />
             全部文件
-          </Button>
-          <Button
-            variant="ghost"
-            className={`w-full justify-start ${isRecentUploadsActive ? "bg-white/30" : ""}`}
-            onClick={onRecentUploadsClick}
-          >
-            <Upload className="mr-2 h-4 w-4" />
-            最近上传
-          </Button>
-          <Button
-            variant="ghost"
-            className={`w-full justify-start ${isMySharesActive ? "bg-white/30" : ""}`}
-            onClick={onMySharesClick}
-          >
-            <Share2 className="mr-2 h-4 w-4" />
-            我的分享
           </Button>
           <Button
             variant="ghost"

@@ -47,20 +47,31 @@ export function useGateway(): GatewayState & GatewayOperations {
   // 测试所有网关
   const testGateways = useCallback(async () => {
     if (isTesting) return;
-    
+
     setIsTesting(true);
     setStoreIsTesting(true);
     showToast("开始测试网关...", "info");
 
     try {
-      const results = await gatewayApi.autoTestGateways(customGateways);
+      const results = await gatewayApi.autoTestGateways(customGateways, false, {
+        onProgress: (gateway, result) => {
+          // 可以在这里添加实时进度更新
+          console.log(`网关 ${gateway.name}: ${result.available ? '可用' : '不可用'}, 延迟 ${result.latency}ms, 可靠性 ${result.reliability}%`);
+        },
+        priorityRegions: ["CN", "INTL"],
+      });
       setGateways(results);
       const now = Date.now();
       setLastTestTime(now);
       setStoreLastTestTime(now);
-      
+
       const availableCount = results.filter(g => g.available).length;
-      showToast(`网关测试完成，${availableCount} 个可用`, "success");
+      const highQualityCount = results.filter(g => g.available && (g.healthScore || 0) >= 70).length;
+
+      showToast(
+        `网关测试完成，${availableCount} 个可用，${highQualityCount} 个高质量`,
+        "success"
+      );
     } catch (error) {
       handleError(error, { showToast });
     } finally {
@@ -107,26 +118,33 @@ export function useGateway(): GatewayState & GatewayOperations {
         return;
       }
 
-      // 测试新网关
-      const testResult = await gatewayApi.testGateway(gateway as Gateway);
-      
+      // 测试新网关（使用更准确的测试）
+      const testResult = await gatewayApi.testGateway(gateway as Gateway, {
+        retries: 2,
+        samples: 3,
+      });
+
       const newGateway: Gateway = {
         ...gateway,
         icon: "🌐",
         priority: 100 + customGateways.length,
         available: testResult.available,
         latency: testResult.latency,
+        reliability: testResult.reliability,
+        corsEnabled: testResult.corsEnabled,
+        rangeSupport: testResult.rangeSupport,
+        healthScore: testResult.available ? 70 : 20,
         lastChecked: Date.now(),
       };
 
       addToStore(newGateway);
-      
+
       // 更新网关列表
       setGateways([...gateways, newGateway]);
-      
+
       showToast(
-        testResult.available 
-          ? `网关添加成功，延迟 ${testResult.latency}ms` 
+        testResult.available
+          ? `网关添加成功，延迟 ${testResult.latency}ms，可靠性 ${testResult.reliability}%`
           : "网关添加成功，但当前不可用",
         testResult.available ? "success" : "warning"
       );
@@ -142,14 +160,24 @@ export function useGateway(): GatewayState & GatewayOperations {
     showToast("网关已移除", "success");
   }, [gateways, removeFromStore, setGateways, showToast]);
 
-  // 获取最佳网关
+  // 获取最佳网关（使用健康度评分）
   const getBestGateway = useCallback((): Gateway | null => {
     const available = [...customGateways, ...gateways].filter(g => g.available);
     if (available.length === 0) return null;
-    
-    return available.reduce((best, current) => 
-      (current.latency || Infinity) < (best.latency || Infinity) ? current : best
-    );
+
+    // 按健康度评分、可靠性、延迟综合排序
+    return available.sort((a, b) => {
+      // 健康度优先
+      const healthDiff = (b.healthScore || 0) - (a.healthScore || 0);
+      if (healthDiff !== 0) return healthDiff;
+
+      // 可靠性次之
+      const reliabilityDiff = (b.reliability || 0) - (a.reliability || 0);
+      if (reliabilityDiff !== 0) return reliabilityDiff;
+
+      // 延迟最后
+      return (a.latency || Infinity) - (b.latency || Infinity);
+    })[0];
   }, [gateways, customGateways]);
 
   // 获取可用网关列表
@@ -167,8 +195,12 @@ export function useGateway(): GatewayState & GatewayOperations {
         const cachedUrls = new Set(cached.map(g => g.url));
         const defaultUrls = gateways.map(g => g.url);
         const hasAllDefaults = defaultUrls.every(url => cachedUrls.has(url));
-        
-        if (hasAllDefaults) {
+
+        // 检查缓存是否过期
+        const cacheAge = Date.now() - (cached[0]?.lastChecked || 0);
+        const cacheExpired = cacheAge > 5 * 60 * 1000;
+
+        if (hasAllDefaults && !cacheExpired) {
           setGateways(cached);
           const availableCount = cached.filter(g => g.available).length;
           if (availableCount > 0) {
@@ -176,7 +208,7 @@ export function useGateway(): GatewayState & GatewayOperations {
           }
         }
       }
-      
+
       // 自动测试网关
       await testGateways();
     };

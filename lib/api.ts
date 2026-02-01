@@ -536,44 +536,169 @@ export const gatewayApi = {
     return gateways;
   },
 
-  async testGateway(gateway: Gateway): Promise<{ available: boolean; latency: number }> {
-    const testUrl = `${gateway.url}${CONFIG.TEST_CID}`;
-    const startTime = performance.now();
+  async testGateway(
+    gateway: Gateway,
+    options: {
+      retries?: number;
+      samples?: number;
+      testCid?: string;
+    } = {}
+  ): Promise<{
+    available: boolean;
+    latency: number;
+    reliability: number;
+    corsEnabled: boolean;
+    rangeSupport: boolean;
+  }> {
+    const { retries = 2, samples = 3, testCid = CONFIG.TEST_CID } = options;
+    const testUrl = `${gateway.url}${testCid}`;
 
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), CONFIG.GATEWAY_TEST.TIMEOUT);
+    const latencies: number[] = [];
+    let successCount = 0;
+    let corsEnabled = false;
+    let rangeSupport = false;
 
-      const response = await fetch(testUrl, {
-        method: "HEAD",
-        signal: controller.signal,
-      });
+    // 多次采样测试
+    for (let sample = 0; sample < samples; sample++) {
+      let sampleLatency = Infinity;
+      let sampleSuccess = false;
 
-      clearTimeout(timeoutId);
+      // 每次采样支持重试
+      for (let attempt = 0; attempt <= retries; attempt++) {
+        if (attempt > 0) {
+          await new Promise((r) => setTimeout(r, CONFIG.GATEWAY_TEST.RETRY_DELAY));
+        }
 
-      const latency = Math.round(performance.now() - startTime);
-      return { available: response.ok, latency };
-    } catch {
-      return { available: false, latency: Infinity };
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(
+            () => controller.abort(),
+            CONFIG.GATEWAY_TEST.TIMEOUT
+          );
+
+          const startTime = performance.now();
+
+          // 使用 HEAD 请求进行基础测试
+          const response = await fetch(testUrl, {
+            method: "HEAD",
+            signal: controller.signal,
+            headers: {
+              Accept: "*/*",
+            },
+          });
+
+          const latency = Math.round(performance.now() - startTime);
+          clearTimeout(timeoutId);
+
+          // 检查响应状态码
+          if (response.ok || response.status === 200 || response.status === 204) {
+            sampleLatency = latency;
+            sampleSuccess = true;
+
+            // 检查 CORS 支持
+            if (response.headers.has("access-control-allow-origin")) {
+              corsEnabled = true;
+            }
+
+            // 检查 Range 支持
+            if (response.headers.has("accept-ranges") || response.status === 206) {
+              rangeSupport = true;
+            }
+
+            break; // 成功则跳出重试
+          }
+        } catch {
+          // 继续重试
+        }
+      }
+
+      if (sampleSuccess) {
+        latencies.push(sampleLatency);
+        successCount++;
+      }
     }
+
+    // 计算可靠性分数 (0-100)
+    const reliability = Math.round((successCount / samples) * 100);
+
+    // 计算平均延迟（去掉最高值，减少异常影响）
+    let avgLatency = Infinity;
+    if (latencies.length > 0) {
+      const sorted = [...latencies].sort((a, b) => a - b);
+      // 如果有多个样本，去掉最高值
+      const validLatencies = sorted.length > 2 ? sorted.slice(0, -1) : sorted;
+      avgLatency = Math.round(
+        validLatencies.reduce((a, b) => a + b, 0) / validLatencies.length
+      );
+    }
+
+    // 可用性判断：至少有一次成功且可靠性 >= 50%
+    const available = successCount > 0 && reliability >= 50;
+
+    return {
+      available,
+      latency: avgLatency,
+      reliability,
+      corsEnabled,
+      rangeSupport,
+    };
   },
 
-  async testAllGateways(gateways: Gateway[]): Promise<Gateway[]> {
+  async testAllGateways(
+    gateways: Gateway[],
+    options: {
+      onProgress?: (gateway: Gateway, result: Gateway) => void;
+      priorityRegions?: string[];
+    } = {}
+  ): Promise<Gateway[]> {
+    const { onProgress, priorityRegions = ["CN", "INTL"] } = options;
     const results: Gateway[] = [];
     const maxConcurrency = CONFIG.GATEWAY_TEST.CONCURRENT_LIMIT;
 
+    // 按区域优先级排序网关
+    const sortedGateways = [...gateways].sort((a, b) => {
+      const aPriority = priorityRegions.indexOf(a.region);
+      const bPriority = priorityRegions.indexOf(b.region);
+      if (aPriority !== bPriority) {
+        return (aPriority === -1 ? 999 : aPriority) - (bPriority === -1 ? 999 : bPriority);
+      }
+      return (a.priority || 999) - (b.priority || 999);
+    });
+
     // 使用队列方式控制并发
-    const queue = [...gateways];
+    const queue = [...sortedGateways];
     const executing: Set<Promise<void>> = new Set();
 
     const processGateway = async (gateway: Gateway): Promise<void> => {
-      const result = await this.testGateway(gateway);
-      results.push({
+      // 根据网关历史表现调整测试参数
+      const testOptions: Parameters<typeof this.testGateway>[1] = {
+        retries: gateway.consecutiveFailures && gateway.consecutiveFailures > 2 ? 1 : 2,
+        samples: gateway.healthScore && gateway.healthScore < 50 ? 2 : 3,
+      };
+
+      const result = await this.testGateway(gateway, testOptions);
+
+      // 计算健康度评分
+      const healthScore = this.calculateHealthScore(gateway, result);
+
+      const gatewayResult: Gateway = {
         ...gateway,
         available: result.available,
         latency: result.latency,
+        reliability: result.reliability,
+        corsEnabled: result.corsEnabled,
+        rangeSupport: result.rangeSupport,
         lastChecked: Date.now(),
-      });
+        healthScore,
+        failureCount: result.available
+          ? Math.max(0, (gateway.failureCount || 0) - 1)
+          : (gateway.failureCount || 0) + 1,
+        consecutiveFailures: result.available ? 0 : (gateway.consecutiveFailures || 0) + 1,
+        lastSuccess: result.available ? Date.now() : gateway.lastSuccess,
+      };
+
+      results.push(gatewayResult);
+      onProgress?.(gateway, gatewayResult);
     };
 
     // 持续处理直到队列为空且所有任务完成
@@ -593,10 +718,50 @@ export const gatewayApi = {
       }
     }
 
+    // 排序：可用性 > 健康度 > 延迟 > 区域优先级
     return results.sort((a, b) => {
       if (a.available !== b.available) return a.available ? -1 : 1;
+      if ((b.healthScore || 0) !== (a.healthScore || 0)) {
+        return (b.healthScore || 0) - (a.healthScore || 0);
+      }
       return (a.latency || Infinity) - (b.latency || Infinity);
     });
+  },
+
+  // 计算网关健康度评分
+  calculateHealthScore(
+    gateway: Gateway,
+    testResult: { available: boolean; latency: number; reliability: number }
+  ): number {
+    const { BASE_LATENCY_SCORE, MAX_LATENCY, SUCCESS_BONUS, FAILURE_PENALTY, CN_REGION_BONUS } =
+      CONFIG.GATEWAY_HEALTH.SCORING;
+
+    let score = gateway.healthScore || BASE_LATENCY_SCORE;
+
+    if (testResult.available) {
+      // 基于延迟计算基础分
+      const latencyRatio = Math.min(testResult.latency / MAX_LATENCY, 1);
+      const latencyScore = Math.round((1 - latencyRatio) * BASE_LATENCY_SCORE);
+
+      // 可靠性加分
+      const reliabilityBonus = Math.round((testResult.reliability / 100) * SUCCESS_BONUS);
+
+      // 区域加分
+      const regionBonus = gateway.region === "CN" ? CN_REGION_BONUS : 0;
+
+      // 综合评分（加权平均）
+      score = Math.round(latencyScore * 0.5 + reliabilityBonus * 0.3 + regionBonus * 0.2);
+
+      // 连续成功奖励
+      if (gateway.consecutiveFailures === 0 && gateway.lastSuccess) {
+        score = Math.min(score + 2, 100);
+      }
+    } else {
+      // 失败扣分
+      score = Math.max(score - FAILURE_PENALTY * ((gateway.consecutiveFailures || 0) + 1), 0);
+    }
+
+    return Math.round(score);
   },
 
   getCachedResults(): Gateway[] | null {
@@ -626,20 +791,41 @@ export const gatewayApi = {
   },
 
   // 自动检测网关（带缓存机制）
-  async autoTestGateways(customGateways: Gateway[] = [], forceRefresh: boolean = false): Promise<Gateway[]> {
+  async autoTestGateways(
+    customGateways: Gateway[] = [],
+    forceRefresh: boolean = false,
+    options: {
+      onProgress?: (gateway: Gateway, result: Gateway) => void;
+      priorityRegions?: string[];
+    } = {}
+  ): Promise<Gateway[]> {
+    const { onProgress, priorityRegions } = options;
+
+    // 加载历史健康度数据
+    const healthHistory = this.loadHealthHistory();
+
     // 先检查缓存（除非强制刷新）
     if (!forceRefresh) {
       const cached = this.getCachedResults();
       if (cached && cached.length > 0) {
         // 验证缓存中的网关是否包含当前所有默认网关
-        const cachedUrls = new Set(cached.map(g => g.url));
-        const defaultUrls = CONFIG.DEFAULT_GATEWAYS.map(g => g.url);
-        const hasAllDefaults = defaultUrls.every(url => cachedUrls.has(url));
-        
-        // 只有当缓存包含所有默认网关且有可用网关时才使用缓存
-        const availableCount = cached.filter(g => g.available).length;
-        if (availableCount > 0 && hasAllDefaults) {
-          return cached;
+        const cachedUrls = new Set(cached.map((g) => g.url));
+        const defaultUrls = CONFIG.DEFAULT_GATEWAYS.map((g) => g.url);
+        const hasAllDefaults = defaultUrls.every((url) => cachedUrls.has(url));
+
+        // 检查缓存是否过期（超过5分钟）
+        const cacheAge = Date.now() - (cached[0]?.lastChecked || 0);
+        const cacheExpired = cacheAge > 5 * 60 * 1000;
+
+        // 只有当缓存包含所有默认网关、有可用网关且未过期时才使用缓存
+        const availableCount = cached.filter((g) => g.available).length;
+        if (availableCount > 0 && hasAllDefaults && !cacheExpired) {
+          // 合并历史健康度数据
+          const merged = cached.map((g) => ({
+            ...g,
+            ...healthHistory[g.name],
+          }));
+          return merged;
         }
       }
     }
@@ -666,22 +852,120 @@ export const gatewayApi = {
       }
     });
 
+    // 合并历史健康度数据到网关
+    const gatewaysWithHistory = allGateways.map((g) => ({
+      ...g,
+      ...healthHistory[g.name],
+    }));
+
     // 执行检测
-    const results = await this.testAllGateways(allGateways);
+    const results = await this.testAllGateways(gatewaysWithHistory, {
+      onProgress,
+      priorityRegions,
+    });
+
+    // 保存结果和健康度历史
     this.cacheResults(results);
+    this.saveHealthHistory(results);
+
     return results;
   },
 
+  // 加载健康度历史
+  loadHealthHistory(): Record<string, Partial<Gateway>> {
+    try {
+      const stored = localStorage.getItem(CONFIG.GATEWAY_HEALTH.HEALTH_CACHE_KEY);
+      if (!stored) return {};
+
+      const data = JSON.parse(stored);
+      if (Date.now() - data.timestamp > CONFIG.GATEWAY_HEALTH.HEALTH_CACHE_EXPIRY) {
+        return {};
+      }
+
+      return data.history || {};
+    } catch {
+      return {};
+    }
+  },
+
+  // 保存健康度历史
+  saveHealthHistory(gateways: Gateway[]): void {
+    try {
+      const history: Record<string, Partial<Gateway>> = {};
+      gateways.forEach((g) => {
+        history[g.name] = {
+          healthScore: g.healthScore,
+          failureCount: g.failureCount,
+          consecutiveFailures: g.consecutiveFailures,
+          lastSuccess: g.lastSuccess,
+          lastChecked: g.lastChecked,
+        };
+      });
+
+      localStorage.setItem(
+        CONFIG.GATEWAY_HEALTH.HEALTH_CACHE_KEY,
+        JSON.stringify({
+          timestamp: Date.now(),
+          history,
+        })
+      );
+    } catch {
+      // 忽略存储错误
+    }
+  },
+
   // 智能获取最优网关（自动检测）
-  async getBestGatewayUrl(customGateways: Gateway[] = []): Promise<{ url: string; gateway: Gateway | null }> {
+  async getBestGatewayUrl(
+    customGateways: Gateway[] = [],
+    options: {
+      requireRangeSupport?: boolean;
+      requireCors?: boolean;
+      minHealthScore?: number;
+    } = {}
+  ): Promise<{ url: string; gateway: Gateway | null }> {
+    const { requireRangeSupport = false, requireCors = false, minHealthScore = 30 } = options;
+
     const results = await this.autoTestGateways(customGateways);
-    const availableGateways = results.filter((g) => g.available);
+
+    // 过滤符合条件的网关
+    let availableGateways = results.filter((g) => g.available);
+
+    // 应用额外筛选条件
+    if (requireRangeSupport) {
+      availableGateways = availableGateways.filter((g) => g.rangeSupport);
+    }
+    if (requireCors) {
+      availableGateways = availableGateways.filter((g) => g.corsEnabled);
+    }
+    if (minHealthScore > 0) {
+      availableGateways = availableGateways.filter((g) => (g.healthScore || 0) >= minHealthScore);
+    }
 
     if (availableGateways.length > 0) {
-      const bestGateway = availableGateways.sort(
+      // 综合评分排序：健康度 > 可靠性 > 延迟
+      const bestGateway = availableGateways.sort((a, b) => {
+        // 健康度优先
+        const healthDiff = (b.healthScore || 0) - (a.healthScore || 0);
+        if (healthDiff !== 0) return healthDiff;
+
+        // 可靠性次之
+        const reliabilityDiff = (b.reliability || 0) - (a.reliability || 0);
+        if (reliabilityDiff !== 0) return reliabilityDiff;
+
+        // 延迟最后
+        return (a.latency || Infinity) - (b.latency || Infinity);
+      })[0];
+
+      return { url: bestGateway.url, gateway: bestGateway };
+    }
+
+    // 如果没有符合条件的网关，尝试放宽条件
+    const fallbackGateways = results.filter((g) => g.available);
+    if (fallbackGateways.length > 0) {
+      const best = fallbackGateways.sort(
         (a, b) => (a.latency || Infinity) - (b.latency || Infinity)
       )[0];
-      return { url: bestGateway.url, gateway: bestGateway };
+      return { url: best.url, gateway: best };
     }
 
     // 如果没有可用网关，返回默认网关

@@ -8,7 +8,6 @@ import { useAuthStore } from "@/lib/store";
 
 import { Sidebar } from "@/components/sidebar";
 import { FileList } from "@/components/file-list";
-import { ShareModal } from "@/components/modals/share-modal";
 import { GatewayModal } from "@/components/modals/gateway-modal";
 import { FolderModal } from "@/components/modals/folder-modal";
 import { MoveModal } from "@/components/modals/move-modal";
@@ -41,16 +40,11 @@ export default function DashboardPage() {
     copiedId,
     currentFolderId,
     setCurrentFolderId,
-    isRecentUploads,
-    setIsRecentUploads,
-    isMyShares,
-    setIsMyShares,
     selectedFiles,
 
     // Data
     files,
     folders,
-    shares,
     totalSize,
     gateways,
     customGateways,
@@ -60,13 +54,6 @@ export default function DashboardPage() {
     uploadProgress,
 
     // Modal States
-    shareModalOpen,
-    setShareModalOpen,
-    selectedFileForShare,
-    setSelectedFileForShare,
-    shareUrl,
-    sharePassword,
-    shareExpiry,
     gatewayModalOpen,
     setGatewayModalOpen,
     isTestingGateways,
@@ -113,12 +100,10 @@ export default function DashboardPage() {
     handleFileUpload,
     handleDelete,
     handleCopyCID,
-    handleShare,
     handleRenameFile,
     handleSubmitRenameFile,
     handlePreview,
     handleClosePreview,
-    handleCopyShareLink,
     handleTestGateways,
     handleRefreshGateways,
     handleFetchPublicGateways,
@@ -147,8 +132,6 @@ export default function DashboardPage() {
     setNewGatewayName,
     setNewGatewayUrl,
     setNewGatewayRegion,
-    setSharePassword,
-    setShareExpiry,
     setDarkMode,
     setItemsPerPage,
     setAutoRefresh,
@@ -160,25 +143,15 @@ export default function DashboardPage() {
     const matchesSearch =
       file.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       file.cid.toLowerCase().includes(searchQuery.toLowerCase());
-    // 修改文件夹筛选逻辑：
-    // - 如果选择了特定文件夹，只显示该文件夹中的文件
-    // - 如果在"全部文件"视图（currentFolderId === null 且不是最近上传），显示所有文件
     const matchesFolder = currentFolderId
       ? file.folder_id === currentFolderId
-      : isRecentUploads
-        ? !file.folder_id || file.folder_id === "default"
-        : true; // 全部文件视图：显示所有文件，不限于特定文件夹
-    const isRecent = isRecentUploads
-      ? file.uploadedAt && Date.now() - file.uploadedAt < 7 * 24 * 60 * 60 * 1000
       : true;
-    return matchesSearch && matchesFolder && isRecent;
+    return matchesSearch && matchesFolder;
   });
 
-  const currentFolderName = isRecentUploads
-    ? "最近上传"
-    : currentFolderId
-      ? folders.find((f) => f.id === currentFolderId)?.name || "全部文件"
-      : "全部文件";
+  const currentFolderName = currentFolderId
+    ? folders.find((f) => f.id === currentFolderId)?.name || "全部文件"
+    : "全部文件";
 
   if (!isAuthenticated) return null;
 
@@ -198,11 +171,6 @@ export default function DashboardPage() {
         onTestGateways={handleTestGateways}
         onFolderSelect={(folderId) => {
           setCurrentFolderId(folderId);
-          // 当点击"全部文件"时，重置其他筛选状态
-          if (folderId === null) {
-            setIsRecentUploads(false);
-            setIsMyShares(false);
-          }
         }}
         onCreateFolder={() => {
           setEditingFolder(null);
@@ -219,18 +187,6 @@ export default function DashboardPage() {
           logout();
           router.push("/");
         }}
-        onRecentUploadsClick={() => {
-          setIsRecentUploads(!isRecentUploads);
-          setIsMyShares(false);
-          setCurrentFolderId(null);
-        }}
-        isRecentUploadsActive={isRecentUploads}
-        onMySharesClick={() => {
-          setIsMyShares(!isMyShares);
-          setIsRecentUploads(false);
-          setCurrentFolderId(null);
-        }}
-        isMySharesActive={isMyShares}
       />
 
       {/* Main Content */}
@@ -281,7 +237,6 @@ export default function DashboardPage() {
             copiedId={copiedId}
             selectedFiles={selectedFiles}
             onCopyCid={handleCopyCID}
-            onShare={handleShare}
             onDownload={(cid, filename) => handleDownload(cid, filename)}
             onDownloadWithGateway={(cid, filename, gatewayUrl) => handleDownloadWithGateway(cid, filename, gatewayUrl)}
             onDownloadMenu={(file) => {
@@ -312,21 +267,6 @@ export default function DashboardPage() {
       />
 
       {/* Modals */}
-      <ShareModal
-        isOpen={shareModalOpen}
-        onClose={() => setShareModalOpen(false)}
-        file={selectedFileForShare}
-        shareUrl={shareUrl}
-        sharePassword={sharePassword}
-        shareExpiry={shareExpiry}
-        onPasswordChange={setSharePassword}
-        onExpiryChange={setShareExpiry}
-        onCopyLink={handleCopyShareLink}
-        onCopyCid={() =>
-          selectedFileForShare && handleCopyCID(selectedFileForShare.cid, selectedFileForShare.id)
-        }
-      />
-
       <GatewayModal
         isOpen={gatewayModalOpen}
         onClose={() => setGatewayModalOpen(false)}

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Cloud, Copy, Check, Share2, Download, Folder, Trash2, ChevronDown, Globe, Pencil } from "lucide-react";
+import { Cloud, Copy, Check, Download, Folder, Trash2, ChevronDown, Globe, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { FileRecord, Gateway } from "@/types";
@@ -15,7 +15,6 @@ interface FileListProps {
   copiedId: string | number | null;
   selectedFiles: string[];
   onCopyCid: (cid: string, fileId: string | number) => void;
-  onShare: (file: FileRecord) => void;
   onDownload: (cid: string, filename: string) => void;
   onDownloadWithGateway: (cid: string, filename: string, gateway: Gateway) => void;
   onDownloadMenu: (file: FileRecord) => void;
@@ -35,7 +34,6 @@ export function FileList({
   copiedId,
   selectedFiles,
   onCopyCid,
-  onShare,
   onDownload,
   onDownloadWithGateway,
   onDownloadMenu,
@@ -162,15 +160,6 @@ export function FileList({
                       ) : (
                         <Copy className="h-4 w-4" />
                       )}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => onShare(file)}
-                      title="分享"
-                    >
-                      <Share2 className="h-4 w-4" />
                     </Button>
                     <div className="relative" ref={openGatewayMenuId === file.id ? menuRef : null}>
                       <div className="flex items-center">
@@ -319,18 +308,6 @@ export function FileList({
               ) : (
                 <Copy className="h-3 w-3" />
               )}
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 bg-white/80"
-              onClick={(e) => {
-                e.stopPropagation();
-                onShare(file);
-              }}
-              title="分享"
-            >
-              <Share2 className="h-3 w-3" />
             </Button>
             <div className="relative" ref={openGatewayMenuId === file.id ? menuRef : undefined}>
               <div className="flex items-center">

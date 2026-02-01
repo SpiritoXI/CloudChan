@@ -18,8 +18,6 @@ export function useDashboard() {
     setFiles, // 从 store 获取 setFiles
     folders, // 从 store 获取文件夹
     setFolders, // 从 store 获取 setFolders
-    shares, // 从 store 获取分享列表
-    setShares, // 从 store 获取 setShares
   } = useFileStore();
 
   // Calculate total size - 确保 size 是数字类型
@@ -39,8 +37,6 @@ export function useDashboard() {
   const [dragOver, setDragOver] = useState(false);
   const [copiedId, setCopiedId] = useState<string | number | null>(null);
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
-  const [isRecentUploads, setIsRecentUploads] = useState(false);
-  const [isMyShares, setIsMyShares] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
 
   // Upload
@@ -48,11 +44,6 @@ export function useDashboard() {
   const [uploadProgress, setUploadProgress] = useState(0);
 
   // Modal States
-  const [shareModalOpen, setShareModalOpen] = useState(false);
-  const [selectedFileForShare, setSelectedFileForShare] = useState<FileRecord | null>(null);
-  const [shareUrl, setShareUrl] = useState("");
-  const [sharePassword, setSharePassword] = useState("");
-  const [shareExpiry, setShareExpiry] = useState("7");
   const [gatewayModalOpen, setGatewayModalOpen] = useState(false);
   const [isTestingGateways, setIsTestingGateways] = useState(false);
   const [isFetchingPublicGateways, setIsFetchingPublicGateways] = useState(false);
@@ -116,10 +107,6 @@ export function useDashboard() {
         // 从服务器加载文件夹列表
         const loadedFolders = await api.loadFolders();
         setFolders(loadedFolders);
-
-        // 从服务器加载分享列表
-        const loadedShares = await api.loadShares();
-        setShares(loadedShares);
       } catch (error) {
         showToast("加载数据失败", "error");
         console.error("Failed to load data:", error);
@@ -129,7 +116,7 @@ export function useDashboard() {
     };
 
     loadData();
-  }, [setFiles, setFolders, setShares, showToast]);
+  }, [setFiles, setFolders, showToast]);
 
   // Handle file upload
   const handleFileUpload = useCallback(
@@ -267,25 +254,6 @@ export function useDashboard() {
     },
     [showToast]
   );
-
-  // Handle share
-  const handleShare = useCallback(
-    (file: FileRecord) => {
-      setSelectedFileForShare(file);
-      setSharePassword("");
-      setShareExpiry("7");
-      const shareUrl = `${window.location.origin}/share/${file.cid}`;
-      setShareUrl(shareUrl);
-      setShareModalOpen(true);
-    },
-    []
-  );
-
-  // Handle copy share link
-  const handleCopyShareLink = useCallback(async () => {
-    await copyToClipboard(shareUrl);
-    showToast("分享链接已复制", "success");
-  }, [shareUrl, showToast]);
 
   // Handle rename file
   const handleRenameFile = useCallback(
@@ -694,20 +662,14 @@ export function useDashboard() {
       const matchesSearch =
         file.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         file.cid.toLowerCase().includes(searchQuery.toLowerCase());
-      // 修改文件夹筛选逻辑：与 page.tsx 保持一致
       const matchesFolder = currentFolderId
         ? file.folder_id === currentFolderId
-        : isRecentUploads
-          ? !file.folder_id || file.folder_id === "default"
-          : true; // 全部文件视图：显示所有文件
-      const isRecent = isRecentUploads
-        ? file.uploadedAt && Date.now() - file.uploadedAt < 7 * 24 * 60 * 60 * 1000
         : true;
-      return matchesSearch && matchesFolder && isRecent;
+      return matchesSearch && matchesFolder;
     });
 
     setSelectedFiles(filteredFiles.map((file) => String(file.id)));
-  }, [files, searchQuery, currentFolderId, isRecentUploads]);
+  }, [files, searchQuery, currentFolderId]);
 
   // Handle clear selection
   const handleClearSelection = useCallback(() => {
@@ -765,20 +727,16 @@ export function useDashboard() {
     viewMode, setViewMode,
     isLoading, dragOver, setDragOver,
     copiedId, currentFolderId, setCurrentFolderId,
-    isRecentUploads, setIsRecentUploads,
-    isMyShares, setIsMyShares,
     selectedFiles,
 
     // Data
-    files, folders, shares, totalSize,
+    files, folders, totalSize,
     gateways, customGateways,
 
     // Upload
     isUploading, uploadProgress,
 
     // Modal States
-    shareModalOpen, setShareModalOpen,
-    selectedFileForShare, setSelectedFileForShare, shareUrl, sharePassword, shareExpiry,
     gatewayModalOpen, setGatewayModalOpen,
     isTestingGateways, isFetchingPublicGateways,
     folderModalOpen, setFolderModalOpen,
@@ -799,7 +757,6 @@ export function useDashboard() {
     setNewFolderName, setEditingFolder,
     setNewCid, setNewCidName, setNewCidSize,
     setNewGatewayName, setNewGatewayUrl, setNewGatewayRegion,
-    setSharePassword, setShareExpiry,
     setDarkMode, setItemsPerPage, setAutoRefresh,
     setGateways,
 
@@ -807,12 +764,10 @@ export function useDashboard() {
     handleFileUpload,
     handleDelete,
     handleCopyCID,
-    handleShare,
     handleRenameFile,
     handleSubmitRenameFile,
     handlePreview,
     handleClosePreview,
-    handleCopyShareLink,
     handleTestGateways,
     handleRefreshGateways,
     handleFetchPublicGateways,
