@@ -82,6 +82,9 @@ export function useDashboard() {
     // 如果数据已经加载过，不再重复加载
     if (dataLoadedRef.current) return;
 
+    // 从缓存加载网关列表（在 try 外部定义，供后续使用）
+    const cachedGateways = gatewayApi.getCachedResults();
+
     const loadData = async () => {
       setIsLoading(true);
       try {
@@ -98,8 +101,7 @@ export function useDashboard() {
         const savedAutoRefresh = localStorage.getItem("autoRefresh");
         if (savedAutoRefresh !== null) setAutoRefresh(savedAutoRefresh === "true");
 
-        // 从缓存加载网关列表
-        const cachedGateways = gatewayApi.getCachedResults();
+        // 设置网关列表
         if (cachedGateways && cachedGateways.length > 0) {
           setGateways(cachedGateways);
         } else {
