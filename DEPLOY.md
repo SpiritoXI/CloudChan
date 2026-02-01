@@ -1,14 +1,12 @@
-# CrustShare 详细部署教程
+# CrustShare 部署教程
 
-本文档提供 CrustShare 项目的完整部署指南，包括环境准备、配置说明和三种部署方式。
-
----
+本文档提供 CrustShare 项目的完整部署指南，包含环境准备、配置说明和多种部署方式。
 
 ## 目录
 
-1. [环境准备](#环境准备)
-2. [获取必要服务](#获取必要服务)
-3. [本地开发环境配置](#本地开发环境配置)
+1. [环境要求](#环境要求)
+2. [准备工作](#准备工作)
+3. [本地开发](#本地开发)
 4. [Cloudflare Pages 部署](#cloudflare-pages-部署)
 5. [Vercel 部署](#vercel-部署)
 6. [Docker 部署](#docker-部署)
@@ -16,48 +14,38 @@
 
 ---
 
-## 环境准备
+## 环境要求
 
 ### 系统要求
 
-- **Node.js**: 20.x 或更高版本
-- **包管理器**: pnpm (推荐) 或 npm
-- **Git**: 用于版本控制
+| 项目 | 版本要求 | 说明 |
+|------|----------|------|
+| Node.js | >= 20.x | 运行环境 |
+| pnpm | >= 8.x | 包管理器（推荐）|
+| npm | >= 10.x | 备选包管理器 |
+| Git | >= 2.x | 版本控制 |
 
-### 安装 Node.js
+### 验证环境
 
-**Windows:**
-```powershell
-# 使用 nvm-windows
-nvm install 20
-nvm use 20
-
-# 验证安装
-node -v  # 应显示 v20.x.x
-```
-
-**macOS/Linux:**
 ```bash
-# 使用 nvm
-curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
-nvm install 20
-nvm use 20
-
-# 验证安装
+# 检查 Node.js 版本
 node -v
-```
+# 输出: v20.x.x
 
-### 安装 pnpm（推荐）
+# 检查 pnpm 版本
+pnpm -v
+# 输出: 8.x.x
 
-```bash
-npm install -g pnpm
+# 检查 Git 版本
+git --version
+# 输出: git version 2.x.x
 ```
 
 ---
 
-## 获取必要服务
+## 准备工作
 
-部署 CrustShare 需要以下服务：
+部署 CrustShare 需要以下服务的账号和凭证：
 
 ### 1. Upstash Redis（必需）
 
@@ -71,11 +59,10 @@ npm install -g pnpm
 4. 选择 **Redis**
 5. 配置数据库：
    - **Database Name**: `crustshare`（或自定义）
-   - **Region**: 选择离你最近的区域（如 `ap-southeast-1` 新加坡）
+   - **Region**: 选择离你最近的区域（推荐 `ap-southeast-1` 新加坡）
    - **Type**: 选择 **Free**（免费版足够）
 6. 点击 **Create**
-7. 创建完成后，进入数据库详情页
-8. 复制以下信息：
+7. 创建完成后，进入数据库详情页，复制以下信息：
    - **UPSTASH_URL**: `https://your-url.upstash.io`
    - **UPSTASH_TOKEN**: 点击 **REST API** 标签页，复制 token
 
@@ -93,20 +80,23 @@ npm install -g pnpm
 
 **注意：** Crust 提供一定的免费存储额度，超出后需要充值。
 
-### 3. Cloudflare 账号（推荐）
+### 3. 生成管理员密码哈希
 
-用于部署到 Cloudflare Pages。
+使用以下命令生成 SHA-256 哈希：
 
-**注册步骤：**
+```bash
+# 替换 your-password 为你想要的管理员密码
+node -e "console.log(require('crypto').createHash('sha256').update('your-password').digest('hex'))"
 
-1. 访问 [Cloudflare](https://dash.cloudflare.com/sign-up)
-2. 使用邮箱注册账号
-3. 验证邮箱
-4. 登录控制台
+# 示例输出
+0192023a7bbd73250516f069df18b500...
+```
+
+**保存好生成的哈希值**，后续配置需要用到。
 
 ---
 
-## 本地开发环境配置
+## 本地开发
 
 ### 1. 克隆项目
 
@@ -114,9 +104,6 @@ npm install -g pnpm
 # 克隆仓库
 git clone https://github.com/yourusername/crustshare.git
 cd crustshare
-
-# 或者下载 ZIP 解压后进入目录
-cd crustshare-main
 ```
 
 ### 2. 安装依赖
@@ -129,27 +116,14 @@ pnpm install
 npm install
 ```
 
-### 3. 生成管理员密码哈希
-
-```bash
-# 使用 Node.js 生成 SHA-256 哈希
-node -e "console.log(require('crypto').createHash('sha256').update('你的密码').digest('hex'))"
-
-# 示例：密码为 "admin123"
-node -e "console.log(require('crypto').createHash('sha256').update('admin123').digest('hex'))"
-# 输出：0192023a7bbd73250516f069df18b500...
-```
-
-**保存好生成的哈希值**，稍后需要用到。
-
-### 4. 配置环境变量
+### 3. 配置环境变量
 
 ```bash
 # 复制环境变量模板
 cp .env.example .env.local
 ```
 
-编辑 `.env.local` 文件：
+编辑 `.env.local` 文件，填入你的配置：
 
 ```env
 # ============================================
@@ -160,11 +134,13 @@ UPSTASH_TOKEN=your-upstash-token
 
 # ============================================
 # 管理员密码（SHA256 哈希，必需）
+# 生成方式: node -e "console.log(require('crypto').createHash('sha256').update('密码').digest('hex'))"
 # ============================================
 ADMIN_PASSWORD_HASH=your-password-hash
 
 # ============================================
 # Crust Token（必需）
+# 获取: https://crustcloud.io/
 # ============================================
 CRUST_TOKEN=your-crust-token
 
@@ -174,14 +150,14 @@ CRUST_TOKEN=your-crust-token
 # 默认每页显示文件数
 DEFAULT_PAGE_SIZE=20
 
-# 上传文件大小限制（字节）
+# 上传文件大小限制（字节，默认 1GB）
 MAX_UPLOAD_SIZE=1073741824
 
 # 分享链接默认过期天数
 DEFAULT_SHARE_EXPIRY_DAYS=7
 ```
 
-### 5. 启动开发服务器
+### 4. 启动开发服务器
 
 ```bash
 # 使用 pnpm
@@ -199,246 +175,46 @@ npm run dev
 
 ## Cloudflare Pages 部署
 
-### 方式一：Git 集成部署（推荐用于生产环境）
+Cloudflare Pages 是推荐的部署方式，提供全球 CDN 加速和边缘函数支持。
 
-#### 步骤 1：准备 Git 仓库
+### 前置要求
 
-如果你还没有将代码推送到 GitHub：
+- Cloudflare 账号
+- GitHub 账号（用于代码仓库）
 
-```bash
-# 初始化 Git 仓库（如果还没有）
-git init
+### 部署步骤
 
-# 添加所有文件
-git add .
+#### 第一步：准备代码仓库
 
-# 提交
-git commit -m "Initial commit"
+1. Fork 本仓库到你的 GitHub 账号
+2. 或者创建新的仓库并推送代码
 
-# 添加远程仓库（替换为你的仓库地址）
-git remote add origin https://github.com/yourusername/crustshare.git
-
-# 推送到 main 分支
-git push -u origin main
-```
-
-#### 步骤 2：创建 Cloudflare Pages 项目
+#### 第二步：创建 Cloudflare Pages 项目
 
 1. 登录 [Cloudflare Dashboard](https://dash.cloudflare.com)
-2. 在左侧菜单点击 **Pages**
-3. 点击 **Create a project** 按钮
+2. 点击左侧菜单 **Pages**
+3. 点击 **Create a project**
 4. 选择 **Connect to Git**
-5. 授权 Cloudflare 访问你的 GitHub/GitLab 账号
-6. 在仓库列表中找到 `crustshare`，点击 **Select**
+5. 授权 Cloudflare 访问你的 GitHub 账号
+6. 选择你 fork 的 crustshare 仓库
 7. 点击 **Begin setup**
 
-#### 步骤 3：配置构建设置
+#### 第三步：配置构建设置
 
-在 **Set up builds and deployments** 页面填写：
+在构建设置页面填写以下信息：
 
-| 配置项 | 值 | 说明 |
-|--------|-----|------|
-| **Project name** | `crustshare` | 项目名称，会影响默认域名 |
-| **Production branch** | `main` | 生产环境分支 |
-| **Framework preset** | `Next.js` | 框架预设 |
-| **Build command** | `npm run build` | 构建命令 |
-| **Build output directory** | `dist` | 构建输出目录 |
+| 配置项 | 值 |
+|--------|-----|
+| Project name | `crustshare`（或自定义）|
+| Production branch | `main` |
+| Framework preset | `Next.js` |
+| Build command | `npm run build` |
+| Build output directory | `dist` |
+| Root directory | `/` |
 
-#### 步骤 4：配置环境变量
+#### 第四步：添加环境变量
 
-向下滚动到 **Environment variables** 部分，点击 **Add variable** 添加以下变量：
-
-```
-NODE_VERSION = 20
-UPSTASH_URL = https://your-url.upstash.io
-UPSTASH_TOKEN = your-upstash-token
-ADMIN_PASSWORD_HASH = your-password-hash
-CRUST_TOKEN = your-crust-token
-```
-
-**重要：** 确保所有值都正确无误，错误的配置会导致部署失败。
-
-#### 步骤 5：保存并部署
-
-1. 点击 **Save and Deploy** 按钮
-2. Cloudflare 会开始构建项目
-3. 等待构建完成（通常需要 2-5 分钟）
-4. 构建成功后，会显示访问链接：`https://crustshare.pages.dev`
-
-#### 步骤 6：验证部署
-
-1. 点击访问链接
-2. 使用管理员密码登录
-3. 测试文件上传功能
-4. 测试分享功能
-
-### 方式二：Wrangler CLI 部署（适合自动化）
-
-#### 步骤 1：安装 Wrangler
-
-```bash
-# 全局安装 Wrangler
-npm install -g wrangler
-
-# 验证安装
-wrangler --version
-```
-
-#### 步骤 2：登录 Cloudflare
-
-```bash
-wrangler login
-```
-
-执行后会自动打开浏览器，点击 **Allow** 授权。
-
-#### 步骤 3：创建 wrangler.toml
-
-在项目根目录创建 `wrangler.toml` 文件：
-
-```toml
-name = "crustshare"
-compatibility_date = "2024-01-01"
-compatibility_flags = ["nodejs_compat"]
-
-# 构建设置
-[build]
-command = "npm run build"
-
-# 静态资源目录
-[site]
-bucket = "./dist"
-
-# 生产环境变量（非敏感信息）
-[env.production.vars]
-NODE_ENV = "production"
-NODE_VERSION = "20"
-```
-
-#### 步骤 4：设置 Secrets（敏感信息）
-
-```bash
-# 设置 Upstash URL
-wrangler secret put UPSTASH_URL
-# 提示输入时粘贴: https://your-url.upstash.io
-
-# 设置 Upstash Token
-wrangler secret put UPSTASH_TOKEN
-# 提示输入时粘贴: your-upstash-token
-
-# 设置管理员密码哈希
-wrangler secret put ADMIN_PASSWORD_HASH
-# 提示输入时粘贴: your-password-hash
-
-# 设置 Crust Token
-wrangler secret put CRUST_TOKEN
-# 提示输入时粘贴: your-crust-token
-```
-
-**注意：** Secrets 设置后不会显示在控制台，请妥善保管。
-
-#### 步骤 5：部署
-
-```bash
-# 部署到预览环境
-wrangler deploy
-
-# 或部署到生产环境（如果有配置）
-wrangler deploy --env production
-```
-
-部署完成后，Wrangler 会输出访问地址。
-
-### 方式三：直接上传（适合快速测试）
-
-#### 步骤 1：本地构建
-
-```bash
-# 安装依赖
-npm install
-
-# 构建项目
-npm run build
-```
-
-#### 步骤 2：使用 Wrangler 上传
-
-```bash
-# 部署到 Cloudflare Pages
-wrangler pages deploy dist --project-name=crustshare
-
-# 如果是首次部署，会提示创建项目
-# 输入 "y" 确认
-```
-
-#### 步骤 3：设置环境变量
-
-由于直接上传无法携带环境变量，需要在 Cloudflare Dashboard 中手动设置：
-
-1. 访问 [Cloudflare Pages](https://dash.cloudflare.com)
-2. 找到你的项目
-3. 点击 **Settings** → **Environment variables**
-4. 添加所有必需的环境变量
-5. 重新部署
-
-### 部署后配置
-
-#### 自定义域名
-
-1. 在 Cloudflare Pages 项目页面，点击 **Custom domains** 标签
-2. 点击 **Set up a custom domain**
-3. 输入你的域名，例如：`share.yourdomain.com`
-4. 点击 **Continue**
-5. Cloudflare 会检查 DNS 配置：
-   - 如果域名在 Cloudflare 管理，会自动添加 DNS 记录
-   - 如果不在，需要手动添加 CNAME 记录指向 `crustshare.pages.dev`
-6. 等待 SSL 证书自动配置（通常需要几分钟）
-7. 配置完成后，可以通过自定义域名访问
-
-#### 环境变量更新
-
-如需更新环境变量：
-
-1. 进入项目页面
-2. 点击 **Settings** → **Environment variables**
-3. 修改或添加变量
-4. 点击 **Save**
-5. 进入 **Deployments**，点击 **Retry deployment** 重新部署
-
-#### 查看日志
-
-```bash
-# 实时查看日志
-wrangler pages deployment tail --project-name=crustshare
-
-# 查看特定部署的日志
-wrangler pages deployment tail --project-name=crustshare --deployment-id=xxx
-```
-
----
-
-## Vercel 部署
-
-### 步骤 1：导入项目
-
-1. 访问 [Vercel Dashboard](https://vercel.com/dashboard)
-2. 点击 **Add New...** → **Project**
-3. 点击 **Import Git Repository**
-4. 授权并选择你的 GitHub 账号
-5. 找到 `crustshare` 仓库，点击 **Import**
-
-### 步骤 2：配置项目
-
-在配置页面：
-
-- **Framework Preset**: 选择 `Next.js`
-- **Build Command**: `npm run build`
-- **Output Directory**: `dist`
-- **Install Command**: `npm install`
-
-### 步骤 3：添加环境变量
-
-展开 **Environment Variables** 部分，添加：
+在 **Environment variables** 区域添加以下变量：
 
 ```
 UPSTASH_URL=https://your-url.upstash.io
@@ -447,24 +223,100 @@ ADMIN_PASSWORD_HASH=your-password-hash
 CRUST_TOKEN=your-crust-token
 ```
 
-### 步骤 4：部署
+#### 第五步：部署
 
-点击 **Deploy** 按钮，等待构建完成。
+1. 点击 **Save and Deploy**
+2. 等待构建完成（约 2-5 分钟）
+3. 构建成功后，点击 **Continue to project**
+4. 在 **Deployments** 标签页查看部署状态
 
-### 自定义域名
+#### 第六步：配置自定义域名（可选）
 
-1. 在项目页面点击 **Settings** → **Domains**
-2. 输入你的域名
-3. 按照提示配置 DNS
-4. 等待 SSL 证书配置
+1. 进入项目设置
+2. 点击 **Custom domains** 标签
+3. 点击 **Set up a custom domain**
+4. 输入你的域名并按照提示配置 DNS
+
+### 部署验证
+
+部署完成后，访问分配的域名（如 `https://crustshare.pages.dev`），确认：
+
+1. 登录页面正常显示
+2. 使用管理员密码可以登录
+3. 文件上传功能正常
+4. 分享功能正常
+
+---
+
+## Vercel 部署
+
+Vercel 提供快速的 Next.js 应用部署和自动预览功能。
+
+### 前置要求
+
+- Vercel 账号
+- GitHub 账号
+
+### 部署步骤
+
+#### 第一步：导入项目
+
+1. 登录 [Vercel Dashboard](https://vercel.com/dashboard)
+2. 点击 **Add New Project**
+3. 选择 **Import Git Repository**
+4. 授权 Vercel 访问你的 GitHub 账号
+5. 选择 crustshare 仓库，点击 **Import**
+
+#### 第二步：配置项目
+
+在配置页面填写以下信息：
+
+| 配置项 | 值 |
+|--------|-----|
+| Project Name | `crustshare`（或自定义）|
+| Framework Preset | `Next.js` |
+| Root Directory | `./` |
+| Build Command | `npm run build` |
+| Output Directory | `dist` |
+
+#### 第三步：添加环境变量
+
+展开 **Environment Variables** 区域，添加：
+
+```
+UPSTASH_URL=https://your-url.upstash.io
+UPSTASH_TOKEN=your-upstash-token
+ADMIN_PASSWORD_HASH=your-password-hash
+CRUST_TOKEN=your-crust-token
+```
+
+#### 第四步：部署
+
+1. 点击 **Deploy**
+2. 等待构建完成
+3. 部署成功后，Vercel 会分配一个域名
+
+### Vercel 注意事项
+
+- Vercel 的免费版有函数执行时间限制（10秒），大文件上传可能超时
+- 建议使用 Cloudflare Pages 获得更好的边缘函数支持
 
 ---
 
 ## Docker 部署
 
-### 构建 Docker 镜像
+使用 Docker 可以自托管部署，适合有服务器的用户。
 
-创建 `Dockerfile`：
+### 前置要求
+
+- Docker >= 20.x
+- Docker Compose >= 2.x
+
+### 部署步骤
+
+#### 第一步：创建 Dockerfile
+
+在项目根目录创建 `Dockerfile`：
 
 ```dockerfile
 # 构建阶段
@@ -473,54 +325,41 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 # 复制依赖文件
-COPY package*.json ./
-RUN npm ci
+COPY package.json pnpm-lock.yaml ./
 
-# 复制源码
+# 安装 pnpm
+RUN npm install -g pnpm
+
+# 安装依赖
+RUN pnpm install --frozen-lockfile
+
+# 复制源代码
 COPY . .
 
-# 构建
-RUN npm run build
+# 构建应用
+RUN pnpm build
 
 # 运行阶段
 FROM node:20-alpine AS runner
 
 WORKDIR /app
 
+# 设置环境变量
+ENV NODE_ENV=production
+
 # 复制构建产物
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/package*.json ./
-
-# 安装生产依赖
-RUN npm ci --only=production
+COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/node_modules ./node_modules
 
 # 暴露端口
 EXPOSE 3000
 
-# 启动
-CMD ["npm", "start"]
+# 启动命令
+CMD ["node", "dist/server.js"]
 ```
 
-### 构建并运行
-
-```bash
-# 构建镜像
-docker build -t crustshare .
-
-# 运行容器
-docker run -d \
-  -p 3000:3000 \
-  -e UPSTASH_URL=https://your-url.upstash.io \
-  -e UPSTASH_TOKEN=your-token \
-  -e ADMIN_PASSWORD_HASH=your-hash \
-  -e CRUST_TOKEN=your-token \
-  --name crustshare \
-  crustshare
-```
-
-### 使用 Docker Compose
-
-创建 `docker-compose.yml`：
+#### 第二步：创建 docker-compose.yml
 
 ```yaml
 version: '3.8'
@@ -538,18 +377,50 @@ services:
     restart: unless-stopped
 ```
 
-创建 `.env` 文件：
-
-```env
-UPSTASH_URL=https://your-url.upstash.io
-UPSTASH_TOKEN=your-token
-ADMIN_PASSWORD_HASH=your-hash
-CRUST_TOKEN=your-token
-```
-
-启动：
+#### 第三步：创建 .env 文件
 
 ```bash
+# 创建环境变量文件
+cat > .env << EOF
+UPSTASH_URL=https://your-url.upstash.io
+UPSTASH_TOKEN=your-upstash-token
+ADMIN_PASSWORD_HASH=your-password-hash
+CRUST_TOKEN=your-crust-token
+EOF
+```
+
+#### 第四步：构建并运行
+
+```bash
+# 构建镜像
+docker-compose build
+
+# 启动服务
+docker-compose up -d
+
+# 查看日志
+docker-compose logs -f
+```
+
+#### 第五步：验证部署
+
+访问 `http://localhost:3000` 验证服务是否正常运行。
+
+### Docker 常用命令
+
+```bash
+# 停止服务
+docker-compose down
+
+# 重启服务
+docker-compose restart
+
+# 查看日志
+docker-compose logs -f
+
+# 更新部署（拉取最新代码后）
+docker-compose down
+docker-compose build --no-cache
 docker-compose up -d
 ```
 
@@ -557,158 +428,168 @@ docker-compose up -d
 
 ## 常见问题排查
 
-### 构建失败
+### 1. 构建失败
 
-#### 错误：Node 版本不兼容
+**问题：** `npm run build` 失败
 
-```
-Error: Node.js version 18.x is not supported. Please use Node.js 20.x or higher.
-```
+**排查步骤：**
 
-**解决：**
-- Cloudflare Pages：设置环境变量 `NODE_VERSION=20`
-- Vercel：在项目设置中选择 Node.js 20
-- 本地：使用 nvm 切换到 Node 20
-
-#### 错误：依赖安装失败
-
-```
-npm ERR! code ERESOLVE
-npm ERR! ERESOLVE could not resolve
-```
-
-**解决：**
 ```bash
-# 删除 node_modules 和 lock 文件
-rm -rf node_modules package-lock.json
+# 1. 清除缓存
+rm -rf node_modules .next dist
 
-# 重新安装
-npm install
+# 2. 重新安装依赖
+pnpm install
+
+# 3. 检查 TypeScript 错误
+pnpm typecheck
+
+# 4. 再次构建
+pnpm build
 ```
 
-#### 错误：构建内存不足
+### 2. 环境变量错误
 
-```
-FATAL ERROR: Reached heap limit Allocation failed
-```
+**问题：** 提示缺少环境变量
 
-**解决：**
-- Cloudflare Pages：无法调整，尝试优化代码
-- 本地/Vercel：设置 `NODE_OPTIONS=--max-old-space-size=4096`
+**解决方案：**
 
-### 运行时错误
+1. 确认 `.env.local` 文件存在且配置正确
+2. 检查变量名是否拼写正确
+3. 重新启动开发服务器
 
-#### 错误：Redis 连接失败
+### 3. Upstash 连接失败
 
-```
-Error: Connection refused to Upstash Redis
-```
+**问题：** 无法连接 Redis 数据库
 
-**排查：**
+**排查步骤：**
+
 1. 检查 `UPSTASH_URL` 和 `UPSTASH_TOKEN` 是否正确
-2. 检查 Upstash 数据库是否处于活跃状态
-3. 检查网络连接
+2. 在 Upstash 控制台确认数据库状态为 **Active**
+3. 检查网络连接是否正常
+4. 尝试在本地使用 curl 测试连接：
 
-#### 错误：文件上传失败
-
-```
-Error: Failed to upload to Crust Network
-```
-
-**排查：**
-1. 检查 `CRUST_TOKEN` 是否有效
-2. 检查 Crust 账号余额是否充足
-3. 检查文件大小是否超过限制（默认 1GB）
-
-#### 错误：密码验证失败
-
-```
-Error: Invalid password
-```
-
-**排查：**
-1. 检查 `ADMIN_PASSWORD_HASH` 是否正确生成
-2. 确保使用的是 SHA-256 哈希
-3. 重新生成哈希并更新环境变量
-
-### 性能问题
-
-#### 页面加载慢
-
-**优化建议：**
-1. 启用 Cloudflare CDN 缓存
-2. 优化图片大小
-3. 使用懒加载
-
-#### 网关测试慢
-
-**优化建议：**
-1. 减少并发测试数量
-2. 使用缓存的网关结果
-3. 添加更多本地网关
-
-### 其他问题
-
-#### 如何查看详细日志
-
-**Cloudflare Pages：**
 ```bash
-wrangler pages deployment tail --project-name=crustshare
+curl -H "Authorization: Bearer YOUR_TOKEN" \
+  https://your-url.upstash.io/get/test
 ```
 
-**Vercel：**
-在 Vercel Dashboard → 项目 → Functions → 查看日志
+### 4. 文件上传失败
 
-#### 如何回滚部署
+**问题：** 无法上传文件到 Crust Network
 
-**Cloudflare Pages：**
-1. 进入项目页面
-2. 点击 **Deployments**
-3. 找到之前的部署版本
-4. 点击 **...** → **Rollback to this deployment**
+**排查步骤：**
 
-**Vercel：**
-1. 进入项目页面
-2. 点击 **Deployments**
-3. 找到之前的版本
-4. 点击右侧的 **...** → **Promote to Production**
+1. 检查 `CRUST_TOKEN` 是否有效
+2. 在 Crust Cloud 控制台确认 Token 状态
+3. 检查文件大小是否超过限制（默认 1GB）
+4. 查看浏览器控制台的网络请求错误
+
+### 5. 登录失败
+
+**问题：** 管理员密码无法登录
+
+**排查步骤：**
+
+1. 重新生成密码哈希：
+
+```bash
+node -e "console.log(require('crypto').createHash('sha256').update('your-password').digest('hex'))"
+```
+
+2. 更新 `ADMIN_PASSWORD_HASH` 环境变量
+3. 重新部署或重启服务
+
+### 6. Cloudflare Pages 部署后 404
+
+**问题：** 部署成功后访问页面显示 404
+
+**解决方案：**
+
+1. 检查构建设置中的 **Output directory** 是否为 `dist`
+2. 检查 `_routes.json` 文件是否存在
+3. 在 Cloudflare Pages 设置中检查 **Build output directory**
+
+### 7. 网关测试失败
+
+**问题：** 无法测试 IPFS 网关
+
+**排查步骤：**
+
+1. 检查网络连接
+2. 确认浏览器没有阻止跨域请求
+3. 尝试添加自定义网关
+4. 清除浏览器缓存后重试
+
+### 8. 分享链接无法访问
+
+**问题：** 生成的分享链接无法打开
+
+**排查步骤：**
+
+1. 确认 CID 有效
+2. 检查网关是否可用
+3. 尝试切换其他网关
+4. 确认文件已在 IPFS 网络中可用
+
+---
+
+## 性能优化建议
+
+### 1. 启用 CDN
+
+使用 Cloudflare 或 Vercel 的 CDN 加速静态资源。
+
+### 2. 图片优化
+
+- 使用 WebP 格式
+- 启用图片懒加载
+- 使用适当的图片尺寸
+
+### 3. 代码分割
+
+Next.js 自动进行代码分割，确保按需加载。
+
+### 4. 缓存策略
+
+- 网关测试结果缓存 10 分钟
+- 文件列表适当缓存
+- 使用 Service Worker 缓存静态资源
 
 ---
 
 ## 安全建议
 
-1. **定期更换密码**：定期更新管理员密码并重新生成哈希
-2. **保护环境变量**：不要将 `.env.local` 提交到 Git
-3. **启用 HTTPS**：生产环境必须使用 HTTPS
-4. **限制访问**：可以使用 Cloudflare Access 限制访问
-5. **监控日志**：定期检查访问日志，发现异常及时处理
+### 1. 密码安全
+
+- 使用强密码（至少 12 位，包含大小写字母、数字、符号）
+- 定期更换管理员密码
+- 不要将密码哈希提交到代码仓库
+
+### 2. 环境变量
+
+- 使用 `.env.local` 存储敏感信息
+- 生产环境使用平台提供的环境变量管理
+- 定期轮换 API Token
+
+### 3. 访问控制
+
+- 启用 Cloudflare 的 DDoS 防护
+- 配置适当的 CORS 策略
+- 监控异常访问日志
 
 ---
 
-## 更新部署
+## 获取帮助
 
-### 更新代码后重新部署
+如果遇到问题无法解决，可以通过以下方式获取帮助：
 
-**Git 集成方式：**
-```bash
-git add .
-git commit -m "Update feature"
-git push origin main
-```
-Cloudflare/Vercel 会自动触发重新部署。
-
-**手动部署方式：**
-```bash
-# 拉取最新代码
-git pull origin main
-
-# 重新构建
-npm run build
-
-# 重新部署
-wrangler pages deploy dist --project-name=crustshare
-```
+1. 查看项目 [Issues](https://github.com/yourusername/crustshare/issues)
+2. 提交新的 Issue，描述问题和复现步骤
+3. 查看 Cloudflare/Vercel 官方文档
 
 ---
 
-如有其他问题，请查看项目 Issues 或提交新的 Issue。
+## 更新日志
+
+查看 [CHANGELOG.md](./CHANGELOG.md) 了解版本更新历史。
