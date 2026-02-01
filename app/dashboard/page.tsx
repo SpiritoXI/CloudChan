@@ -240,7 +240,7 @@ export default function DashboardPage() {
             propagatingFiles={propagatingFiles}
             onCopyCid={handleCopyCID}
             onDownload={(cid, filename) => handleDownload(cid, filename)}
-            onDownloadWithGateway={(cid, filename, gatewayUrl) => handleDownloadWithGateway(cid, filename, gatewayUrl)}
+            onDownloadWithGateway={(cid, filename, gateway) => handleDownloadWithGateway(cid, filename, gateway)}
             onDownloadMenu={(file) => {
               setSelectedFileForDownload(file);
               setDownloadModalOpen(true);

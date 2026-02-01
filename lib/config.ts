@@ -29,8 +29,45 @@ export const API = {
  * Crust Network 配置
  */
 export const CRUST = {
+  // 多个上传 API 端点，支持故障转移
+  UPLOAD_APIS: [
+    'https://gw.crustfiles.app/api/v0/add?pin=true',
+    'https://gw.crust.network/api/v0/add?pin=true',
+    'https://gw.ipfsscan.io/api/v0/add?pin=true',
+  ],
+  // 主上传 API（向后兼容）
   UPLOAD_API: 'https://gw.crustfiles.app/api/v0/add?pin=true',
-  TEST_CID: 'bafkreigh2akiscaildcqabsyg3dfr6chu3fgpregiymsck7e7aqa4s52zy',
+  // 上传超时时间（毫秒）- 5分钟
+  UPLOAD_TIMEOUT: 5 * 60 * 1000,
+  // 上传重试次数
+  UPLOAD_RETRY_ATTEMPTS: 3,
+  // 重试延迟基数（毫秒）
+  UPLOAD_RETRY_DELAY: 2000,
+} as const;
+
+/**
+ * 网关测试 CID 列表 - 多个备用
+ */
+export const GATEWAY_TEST_CIDS = [
+  'bafkreigh2akiscaildcqabsyg3dfr6chu3fgpregiymsck7e7aqa4s52zy',
+  'QmYwAPJzv5CZsnAzt8auVKKf7u8fKjs3aLrH2z8zZzZzZz',
+  'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi',
+] as const;
+
+/**
+ * 传播配置
+ */
+export const PROPAGATION = {
+  // 最大并发传播数
+  MAX_CONCURRENT: 5,
+  // 传播超时时间（毫秒）
+  TIMEOUT: 30000,
+  // 最大传播网关数
+  MAX_GATEWAYS: 15,
+  // 重试次数
+  MAX_RETRIES: 3,
+  // 重试延迟基数（毫秒）
+  RETRY_DELAY: 1000,
 } as const;
 
 /**
@@ -120,14 +157,16 @@ export const EXTENDED_GATEWAYS: Gateway[] = [
  * 网关测试配置
  */
 export const GATEWAY_TEST = {
-  TIMEOUT: 10000,
+  TIMEOUT: 15000, // 增加到15秒，适应较差网络环境
   CONCURRENT_LIMIT: 8,
   RETRY_TIMES: 1,
   RETRY_DELAY: 1000,
   HIDE_UNAVAILABLE: false,
   CHECK_CACHE_KEY: 'cc_gateway_check_result_v3',
-  CHECK_CACHE_EXPIRY: 10 * 60 * 1000,
-  CACHE_VERSION: '3.1',
+  CHECK_CACHE_EXPIRY: 3 * 60 * 1000, // 减少到3分钟，网关状态变化较快
+  CACHE_VERSION: '3.2', // 更新缓存版本使旧缓存失效
+  // 上传前验证网关 freshness
+  GATEWAY_FRESHNESS_THRESHOLD: 60 * 1000, // 1分钟内检测过的网关才视为新鲜
 } as const;
 
 /**
@@ -168,7 +207,7 @@ export const UPLOAD = {
  */
 export const INTEGRITY_CHECK = {
   METHOD: 'head',
-  HEAD_TIMEOUT: 10000,
+  HEAD_TIMEOUT: 15000, // 增加到15秒
   FULL_TIMEOUT: 30000,
   MAX_RETRIES: 2,
   PARALLEL_GATEWAYS: 3,
@@ -230,7 +269,12 @@ export const CONFIG = {
   API_SHARE: API.SHARE,
   API_VERIFY_SHARE_PASSWORD: API.VERIFY_SHARE_PASSWORD,
   CRUST_UPLOAD_API: CRUST.UPLOAD_API,
-  TEST_CID: CRUST.TEST_CID,
+  CRUST_UPLOAD_APIS: CRUST.UPLOAD_APIS,
+  CRUST_UPLOAD_TIMEOUT: CRUST.UPLOAD_TIMEOUT,
+  CRUST_UPLOAD_RETRY_ATTEMPTS: CRUST.UPLOAD_RETRY_ATTEMPTS,
+  CRUST_UPLOAD_RETRY_DELAY: CRUST.UPLOAD_RETRY_DELAY,
+  TEST_CID: GATEWAY_TEST_CIDS[0],
+  GATEWAY_TEST_CIDS,
   PUBLIC_GATEWAY_SOURCES,
   DEFAULT_GATEWAYS,
   EXTENDED_GATEWAYS,
@@ -242,4 +286,5 @@ export const CONFIG = {
   INTEGRITY_CHECK,
   SECURITY,
   UI,
+  PROPAGATION,
 } as const;

@@ -564,44 +564,55 @@ export function useDashboard() {
     [gateways, setGateways, showToast]
   );
 
-  // Handle download
+  // Handle download - 跳转到下载页面
   const handleDownload = useCallback(
-    async (cid: string, filename: string) => {
-      try {
-        const { url } = await gatewayApi.getBestGatewayUrl();
-        const downloadUrl = `${url}${cid}?filename=${encodeURIComponent(filename)}&download=true`;
-        window.open(downloadUrl, '_blank');
-        showToast(`开始下载 ${filename}`, "success");
-      } catch {
-        showToast(`下载 ${filename} 失败`, "error");
+    (cid: string, filename: string, fileSize?: number) => {
+      const params = new URLSearchParams();
+      if (filename) {
+        params.set("filename", filename);
       }
-    },
-    [showToast]
-  );
-
-  // Handle download file record
-  const handleDownloadFile = useCallback(
-    async (file: FileRecord) => {
-      try {
-        const { url } = await gatewayApi.getBestGatewayUrl();
-        const downloadUrl = `${url}${file.cid}?filename=${encodeURIComponent(file.name)}&download=true`;
-        window.open(downloadUrl, '_blank');
-        showToast(`开始下载 ${file.name}`, "success");
-      } catch {
-        showToast(`下载 ${file.name} 失败`, "error");
+      if (fileSize) {
+        params.set("size", fileSize.toString());
       }
-    },
-    [showToast]
-  );
-
-  // Handle download with gateway
-  const handleDownloadWithGateway = useCallback(
-    (cid: string, filename: string, gateway: any) => {
-      const downloadUrl = `${gateway.url}${cid}?filename=${encodeURIComponent(filename)}&download=true`;
+      const queryString = params.toString();
+      const downloadUrl = `/download/${cid}${queryString ? `?${queryString}` : ""}`;
       window.open(downloadUrl, '_blank');
-      showToast(`使用 ${gateway.name} 下载 ${filename}`, "success");
     },
-    [showToast]
+    []
+  );
+
+  // Handle download file record - 跳转到下载页面
+  const handleDownloadFile = useCallback(
+    (file: FileRecord) => {
+      const params = new URLSearchParams();
+      if (file.name) {
+        params.set("filename", file.name);
+      }
+      if (file.size) {
+        params.set("size", file.size.toString());
+      }
+      const queryString = params.toString();
+      const downloadUrl = `/download/${file.cid}${queryString ? `?${queryString}` : ""}`;
+      window.open(downloadUrl, '_blank');
+    },
+    []
+  );
+
+  // Handle download with gateway - 跳转到下载页面
+  const handleDownloadWithGateway = useCallback(
+    (cid: string, filename: string, gateway: any, fileSize?: number) => {
+      const params = new URLSearchParams();
+      if (filename) {
+        params.set("filename", filename);
+      }
+      if (fileSize) {
+        params.set("size", fileSize.toString());
+      }
+      const queryString = params.toString();
+      const downloadUrl = `/download/${cid}${queryString ? `?${queryString}` : ""}`;
+      window.open(downloadUrl, '_blank');
+    },
+    []
   );
 
   // Handle create folder

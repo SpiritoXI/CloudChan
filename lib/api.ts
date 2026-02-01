@@ -426,9 +426,62 @@ export const api = {
 };
 
 export const uploadApi = {
+  /**
+   * 上传文件到 Crust Network，支持故障转移
+   * 当主上传节点失败时，自动尝试备用节点
+   */
   async uploadToCrust(
     file: File,
     token: string,
+    onProgress: (progress: number) => void,
+    attempt: number = 0
+  ): Promise<{ cid: string; size: number; hash?: string }> {
+    const uploadApis = CONFIG.CRUST_UPLOAD_APIS || [CONFIG.CRUST_UPLOAD_API];
+    const maxRetries = CONFIG.CRUST_UPLOAD_RETRY_ATTEMPTS || 3;
+    const retryDelay = CONFIG.CRUST_UPLOAD_RETRY_DELAY || 2000;
+
+    // 选择当前尝试的 API
+    const apiIndex = attempt % uploadApis.length;
+    const currentApi = uploadApis[apiIndex];
+
+    try {
+      const result = await this.uploadToSingleEndpoint(file, token, currentApi, onProgress);
+      console.log(`[Upload] 成功使用节点: ${currentApi}`);
+      return result;
+    } catch (error) {
+      console.warn(`[Upload] 节点 ${currentApi} 失败:`, error);
+
+      // 计算是否应该重试
+      const shouldRetry = attempt < maxRetries - 1;
+
+      if (shouldRetry) {
+        const isSameEndpoint = apiIndex === (attempt + 1) % uploadApis.length;
+        const delay = isSameEndpoint
+          ? retryDelay * Math.pow(2, Math.floor(attempt / uploadApis.length)) // 指数退避
+          : 0; // 切换到不同节点不延迟
+
+        if (delay > 0) {
+          console.log(`[Upload] ${delay}ms 后重试...`);
+          await new Promise(r => setTimeout(r, delay));
+        } else {
+          console.log(`[Upload] 切换到备用节点...`);
+        }
+
+        return this.uploadToCrust(file, token, onProgress, attempt + 1);
+      }
+
+      // 所有尝试都失败
+      throw new Error(`上传失败，已尝试 ${attempt + 1} 个节点。请检查网络连接或稍后重试。`);
+    }
+  },
+
+  /**
+   * 上传文件到单个端点
+   */
+  async uploadToSingleEndpoint(
+    file: File,
+    token: string,
+    endpoint: string,
     onProgress: (progress: number) => void
   ): Promise<{ cid: string; size: number; hash?: string }> {
     const formData = new FormData();
@@ -436,6 +489,10 @@ export const uploadApi = {
 
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
+      const timeout = CONFIG.CRUST_UPLOAD_TIMEOUT || 5 * 60 * 1000;
+
+      // 设置超时
+      xhr.timeout = timeout;
 
       xhr.upload.addEventListener("progress", (event) => {
         if (event.lengthComputable) {
@@ -457,19 +514,23 @@ export const uploadApi = {
             reject(new Error("解析响应失败"));
           }
         } else {
-          reject(new Error(`上传失败: ${xhr.statusText}`));
+          reject(new Error(`上传失败: ${xhr.statusText || `HTTP ${xhr.status}`}`));
         }
       });
 
       xhr.addEventListener("error", () => {
-        reject(new Error("上传过程中发生错误"));
+        reject(new Error("上传过程中发生网络错误"));
       });
 
       xhr.addEventListener("abort", () => {
         reject(new Error("上传已取消"));
       });
 
-      xhr.open("POST", CONFIG.CRUST_UPLOAD_API);
+      xhr.addEventListener("timeout", () => {
+        reject(new Error(`上传超时（${timeout / 1000}秒）`));
+      });
+
+      xhr.open("POST", endpoint);
       xhr.setRequestHeader("Authorization", `Bearer ${token}`);
       xhr.send(formData);
     });
@@ -599,10 +660,77 @@ export const uploadApi = {
   },
 };
 
+/**
+ * 获取可用的测试 CID
+ * 依次尝试多个 CID，返回第一个可用的
+ */
+async function getWorkingTestCid(): Promise<string | null> {
+  const testCids = CONFIG.GATEWAY_TEST_CIDS || [CONFIG.TEST_CID];
+
+  for (const cid of testCids) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+      const response = await fetch(`https://ipfs.io/ipfs/${cid}`, {
+        method: 'HEAD',
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (response.ok || response.status === 405) {
+        console.log(`[Gateway] 使用测试 CID: ${cid.slice(0, 20)}...`);
+        return cid;
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  console.warn('[Gateway] 所有测试 CID 都不可用，使用默认 CID');
+  return CONFIG.TEST_CID;
+}
+
 export const gatewayApi = {
+  /**
+   * 获取当前可用的测试 CID（缓存 5 分钟）
+   */
+  async getTestCid(): Promise<string> {
+    const cacheKey = 'cc_working_test_cid';
+    const cacheExpiry = 5 * 60 * 1000; // 5 分钟
+
+    try {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        const { cid, timestamp } = JSON.parse(cached);
+        if (Date.now() - timestamp < cacheExpiry) {
+          return cid;
+        }
+      }
+    } catch {
+      // 忽略缓存错误
+    }
+
+    const workingCid = await getWorkingTestCid() || CONFIG.TEST_CID;
+
+    try {
+      localStorage.setItem(cacheKey, JSON.stringify({
+        cid: workingCid,
+        timestamp: Date.now(),
+      }));
+    } catch {
+      // 忽略存储错误
+    }
+
+    return workingCid;
+  },
+
   async fetchPublicGateways(): Promise<Gateway[]> {
-    const allGateways: Gateway[] = [];
-    const seenUrls = new Set<string>();
+    // 使用默认网关作为后备
+    let allGateways: Gateway[] = [...CONFIG.DEFAULT_GATEWAYS];
+    const seenUrls = new Set<string>(allGateways.map(g => g.url));
+    let fetchSuccess = false;
 
     // 从多个源获取网关
     for (const source of CONFIG.PUBLIC_GATEWAY_SOURCES) {
@@ -617,51 +745,87 @@ export const gatewayApi = {
         clearTimeout(timeoutId);
 
         if (response.ok) {
-          const urls: string[] = await response.json();
+          const data = await response.json();
+          
+          // 验证响应格式
+          if (!Array.isArray(data)) {
+            console.warn(`[Gateway] 源 ${source} 返回格式无效，期望数组`);
+            continue;
+          }
 
-          urls.forEach((url, index) => {
-            let gatewayUrl = url;
-            if (!gatewayUrl.endsWith("/")) {
-              gatewayUrl += "/";
-            }
-            if (!gatewayUrl.includes("/ipfs/")) {
-              gatewayUrl += "ipfs/";
-            }
+          fetchSuccess = true;
 
-            if (!seenUrls.has(gatewayUrl)) {
-              seenUrls.add(gatewayUrl);
+          data.forEach((url: string, index: number) => {
+            try {
+              // 验证 URL 格式
+              if (!url || typeof url !== 'string') {
+                return;
+              }
 
-              const hostname = new URL(url).hostname;
-              const isCN = hostname.includes("cn") ||
-                hostname.includes("china") ||
-                hostname.includes("aliyun") ||
-                hostname.includes("tencent") ||
-                hostname.includes("baidu") ||
-                hostname.includes("4everland") ||
-                hostname.includes("ipfsscan") ||
-                hostname.includes("cf-ipfs");
+              let gatewayUrl = url;
+              if (!gatewayUrl.endsWith("/")) {
+                gatewayUrl += "/";
+              }
+              if (!gatewayUrl.includes("/ipfs/")) {
+                gatewayUrl += "ipfs/";
+              }
 
-              allGateways.push({
-                name: hostname.replace(/^www\./, "").split(".")[0],
-                url: gatewayUrl,
-                icon: "🌐",
-                priority: 20 + index,
-                region: isCN ? "CN" : "INTL",
-              });
+              // 验证 URL 是否有效
+              new URL(gatewayUrl);
+
+              if (!seenUrls.has(gatewayUrl)) {
+                seenUrls.add(gatewayUrl);
+
+                const hostname = new URL(url).hostname;
+                const isCN = hostname.includes("cn") ||
+                  hostname.includes("china") ||
+                  hostname.includes("aliyun") ||
+                  hostname.includes("tencent") ||
+                  hostname.includes("baidu") ||
+                  hostname.includes("4everland") ||
+                  hostname.includes("ipfsscan") ||
+                  hostname.includes("cf-ipfs");
+
+                allGateways.push({
+                  name: hostname.replace(/^www\./, "").split(".")[0],
+                  url: gatewayUrl,
+                  icon: "🌐",
+                  priority: 20 + index,
+                  region: isCN ? "CN" : "INTL",
+                });
+              }
+            } catch (urlError) {
+              console.warn(`[Gateway] 无效的网关 URL: ${url}`, urlError);
             }
           });
+
+          console.log(`[Gateway] 从 ${source} 获取了 ${allGateways.length} 个网关`);
         }
-      } catch {
-        // 继续尝试下一个源
+      } catch (error) {
+        console.warn(`[Gateway] 获取源 ${source} 失败:`, error);
         continue;
       }
     }
 
+    // 如果所有源都失败，使用默认网关
+    if (!fetchSuccess) {
+      console.log('[Gateway] 所有公共源获取失败，使用默认网关列表');
+      return [...CONFIG.DEFAULT_GATEWAYS];
+    }
+
     // 快速测试网关可用性
-    if (allGateways.length > 0) {
+    if (allGateways.length > CONFIG.DEFAULT_GATEWAYS.length) {
       console.log(`[Gateway] 从公共源获取了 ${allGateways.length} 个网关，开始快速测试...`);
       const testedGateways = await this.quickTestGateways(allGateways);
-      console.log(`[Gateway] 快速测试完成，${testedGateways.filter(g => g.available).length} 个网关可用`);
+      const availableCount = testedGateways.filter(g => g.available).length;
+      console.log(`[Gateway] 快速测试完成，${availableCount} 个网关可用`);
+      
+      // 如果测试后可用网关太少，合并默认网关
+      if (availableCount < 5) {
+        console.log('[Gateway] 可用网关太少，合并默认网关');
+        return [...CONFIG.DEFAULT_GATEWAYS, ...testedGateways.filter(g => g.available)];
+      }
+      
       return testedGateways.filter(g => g.available);
     }
 
@@ -673,7 +837,7 @@ export const gatewayApi = {
    */
   async quickTestGateways(gateways: Gateway[]): Promise<Gateway[]> {
     const { GATEWAY_FETCH_TEST } = CONFIG;
-    const testCid = CONFIG.TEST_CID;
+    const testCid = await this.getTestCid();
     const results: Gateway[] = [];
 
     // 分批并发测试
@@ -735,7 +899,9 @@ export const gatewayApi = {
     corsEnabled: boolean;
     rangeSupport: boolean;
   }> {
-    const { retries = 2, samples = 3, testCid = CONFIG.TEST_CID, signal } = options;
+    const { retries = 2, samples = 3, testCid: customTestCid, signal } = options;
+    // 如果没有提供自定义 testCid，动态获取一个可用的
+    const testCid = customTestCid || await this.getTestCid();
     const testUrl = `${gateway.url}${testCid}`;
 
     const latencies: number[] = [];
@@ -834,8 +1000,10 @@ export const gatewayApi = {
       );
     }
 
-    // 可用性判断：至少有一次成功且可靠性 >= 50%
-    const available = successCount > 0 && reliability >= 50;
+    // 可用性判断：至少有一次成功、可靠性 >= 60% 且延迟 < 8秒
+    const available = successCount > 0 &&
+                      reliability >= 60 &&
+                      avgLatency < 8000;
 
     return {
       available,
@@ -1696,10 +1864,12 @@ export const propagationApi = {
     const queue = [...gateways];
     const executing: Set<Promise<void>> = new Set();
 
-    const propagateToGateway = async (gateway: Gateway): Promise<void> => {
+    const propagateToGateway = async (gateway: Gateway, attempt: number = 0): Promise<void> => {
       onProgress?.(gateway, 'pending');
       const gatewayKey = `${gateway.name}(${gateway.url})`;
-      
+      const MAX_RETRIES = CONFIG.PROPAGATION.MAX_RETRIES || 3;
+      const RETRY_DELAY_BASE = CONFIG.PROPAGATION.RETRY_DELAY || 1000;
+
       try {
         // 使用 GET 请求替代 HEAD，因为大多数网关对 GET 支持更好
         // 使用 Range 头只请求前1KB，减少数据传输
@@ -1723,6 +1893,14 @@ export const propagationApi = {
           onProgress?.(gateway, 'success');
           console.log(`[Propagation] ✓ ${gateway.name}: ${response.status}`);
         } else {
+          // 非2xx响应，尝试重试
+          if (attempt < MAX_RETRIES) {
+            // 指数退避 + 随机抖动，避免惊群效应
+            const delay = RETRY_DELAY_BASE * Math.pow(2, attempt) + Math.random() * 500;
+            console.log(`[Propagation] ↻ ${gateway.name}: HTTP ${response.status}, ${Math.round(delay)}ms 后重试 ${attempt + 1}/${MAX_RETRIES}`);
+            await new Promise(r => setTimeout(r, delay));
+            return propagateToGateway(gateway, attempt + 1);
+          }
           failed.push(gateway);
           const errorMsg = `HTTP ${response.status}`;
           errors.set(gatewayKey, errorMsg);
@@ -1730,6 +1908,14 @@ export const propagationApi = {
           console.log(`[Propagation] ✗ ${gateway.name}: ${errorMsg}`);
         }
       } catch (error) {
+        // 网络错误，尝试重试
+        if (attempt < MAX_RETRIES) {
+          const delay = RETRY_DELAY_BASE * Math.pow(2, attempt) + Math.random() * 500;
+          console.log(`[Propagation] ↻ ${gateway.name}: 网络错误, ${Math.round(delay)}ms 后重试 ${attempt + 1}/${MAX_RETRIES}`);
+          await new Promise(r => setTimeout(r, delay));
+          return propagateToGateway(gateway, attempt + 1);
+        }
+
         failed.push(gateway);
         let errorMsg = 'Unknown error';
         if (error instanceof Error) {
@@ -1794,17 +1980,21 @@ export const propagationApi = {
     total: number;
     errors: Map<string, string>;
   }> {
-    const { maxGateways = 10, timeout = 30000, onProgress } = options;
+    const { 
+      maxGateways = CONFIG.PROPAGATION.MAX_GATEWAYS || 15, 
+      timeout = CONFIG.PROPAGATION.TIMEOUT || 30000, 
+      onProgress 
+    } = options;
     
-    // 按延迟排序（优先传播延迟低的），但传播所有记录的网关
+    // 按健康度排序（优先传播质量高的）
     const sortedGateways = gateways
-      .sort((a, b) => (a.latency || Infinity) - (b.latency || Infinity))
+      .sort((a, b) => (b.healthScore || 0) - (a.healthScore || 0))
       .slice(0, maxGateways);
 
-    console.log(`[Smart Propagation] Selected ${sortedGateways.length} gateways with lowest latency`);
+    console.log(`[Smart Propagation] Selected ${sortedGateways.length} gateways with highest health score`);
 
     return this.propagateToGateways(cid, sortedGateways, {
-      maxConcurrent: 8,
+      maxConcurrent: CONFIG.PROPAGATION.MAX_CONCURRENT || 5,
       timeout,
       onProgress,
     });
@@ -1837,7 +2027,7 @@ export const propagationApi = {
   },
 
   /**
-   * 传播到所有网关 - 不限数量，传播到所有记录的网关
+   * 传播到所有网关 - 限制并发数以避免浏览器性能问题
    */
   async propagateToAllGateways(
     cid: string,
@@ -1852,13 +2042,13 @@ export const propagationApi = {
     total: number;
     errors: Map<string, string>;
   }> {
-    const { timeout = 30000, onProgress } = options;
+    const { timeout = CONFIG.PROPAGATION.TIMEOUT || 30000, onProgress } = options;
     
-    console.log(`[Full Propagation] Propagating to all ${gateways.length} gateways`);
+    console.log(`[Full Propagation] Propagating to ${gateways.length} gateways with max ${CONFIG.PROPAGATION.MAX_CONCURRENT || 5} concurrent`);
     
-    // 直接使用所有网关，不限数量，增加并发数
+    // 使用配置的并发限制，避免浏览器性能问题
     return this.propagateToGateways(cid, gateways, {
-      maxConcurrent: 10, // 增加并发数以加快传播速度
+      maxConcurrent: CONFIG.PROPAGATION.MAX_CONCURRENT || 5,
       timeout,
       onProgress,
     });

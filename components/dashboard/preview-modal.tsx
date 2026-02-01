@@ -222,7 +222,9 @@ export function PreviewModal({ file, isOpen, gateways, onClose }: PreviewModalPr
   if (!isOpen || !file) return null;
 
   const isImage = isImageFile(file.name);
-  const isMedia = isMediaFile(file.name);
+  // 仅保留静态文件（图片）预览功能，取消媒体文件预览
+  // const isMedia = isMediaFile(file.name);
+  const isMedia = false;
 
   return (
     <AnimatePresence>

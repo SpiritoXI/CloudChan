@@ -189,115 +189,33 @@ export function useSharePage(cid: string) {
     }
   }, [cid]);
 
-  // 下载文件
-  const handleDownload = useCallback(async () => {
-    if (!selectedGateway) return;
-
-    setIsDownloading(true);
-    setDownloadProgress(0);
-
-    try {
-      const result = await downloadApi.downloadFile(
-        cid,
-        shareInfo?.filename || `file-${cid.slice(0, 8)}`,
-        selectedGateway,
-        undefined, // 分享页面可能没有存储的 hash
-        (progress) => setDownloadProgress(progress)
-      );
-
-      if (result.success && result.blob) {
-        downloadApi.triggerDownload(result.blob, shareInfo?.filename || `file-${cid.slice(0, 8)}`);
-        setDownloadProgress(100);
-      } else {
-        // 如果下载失败，回退到直接链接下载
-        const url = `${selectedGateway.url}${cid}`;
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = shareInfo?.filename || `file-${cid.slice(0, 8)}`;
-        link.target = "_blank";
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-      }
-    } catch {
-      // 出错时回退到直接链接下载
-      const url = `${selectedGateway.url}${cid}`;
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = shareInfo?.filename || `file-${cid.slice(0, 8)}`;
-      link.target = "_blank";
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    } finally {
-      setTimeout(() => {
-        setIsDownloading(false);
-        setDownloadProgress(0);
-      }, 1000);
+  // 下载文件 - 跳转到下载页面
+  const handleDownload = useCallback(() => {
+    const params = new URLSearchParams();
+    if (shareInfo?.filename) {
+      params.set("filename", shareInfo.filename);
     }
-  }, [cid, selectedGateway, shareInfo?.filename]);
-
-  // 智能下载
-  const handleSmartDownload = useCallback(async () => {
-    if (gateways.length === 0) {
-      alert("暂无可用网关，请先检测网关");
-      return;
+    if (shareInfo?.size) {
+      params.set("size", shareInfo.size.toString());
     }
+    const queryString = params.toString();
+    const url = `/download/${cid}${queryString ? `?${queryString}` : ""}`;
+    window.open(url, "_blank");
+  }, [cid, shareInfo?.filename, shareInfo?.size]);
 
-    setIsSmartSelecting(true);
-    setGatewayTestStatus(new Map());
-
-    try {
-      const result = await gatewayApi.multiGatewayDownload(
-        cid,
-        gateways,
-        (gateway, status) => {
-          setGatewayTestStatus((prev) => new Map(prev).set(gateway.name, status));
-        }
-      );
-
-      if (result) {
-        setSelectedGateway(result.gateway);
-
-        setIsDownloading(true);
-        setDownloadProgress(0);
-
-        const progressInterval = setInterval(() => {
-          setDownloadProgress((prev) => {
-            if (prev >= 90) {
-              clearInterval(progressInterval);
-              return 90;
-            }
-            return prev + 10;
-          });
-        }, 200);
-
-        const link = document.createElement("a");
-        link.href = result.url;
-        link.download = shareInfo?.filename || `file-${cid.slice(0, 8)}`;
-        link.target = "_blank";
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-
-        setTimeout(() => {
-          clearInterval(progressInterval);
-          setDownloadProgress(100);
-          setTimeout(() => {
-            setIsDownloading(false);
-            setDownloadProgress(0);
-          }, 1000);
-        }, 2000);
-      } else {
-        alert("无法找到可用网关，请手动选择");
-      }
-    } catch (error) {
-      console.error("智能下载失败:", error);
-      alert("智能下载失败，请手动选择网关");
-    } finally {
-      setIsSmartSelecting(false);
+  // 智能下载 - 跳转到下载页面
+  const handleSmartDownload = useCallback(() => {
+    const params = new URLSearchParams();
+    if (shareInfo?.filename) {
+      params.set("filename", shareInfo.filename);
     }
-  }, [cid, gateways, shareInfo?.filename]);
+    if (shareInfo?.size) {
+      params.set("size", shareInfo.size.toString());
+    }
+    const queryString = params.toString();
+    const url = `/download/${cid}${queryString ? `?${queryString}` : ""}`;
+    window.open(url, "_blank");
+  }, [cid, shareInfo?.filename, shareInfo?.size]);
 
   // 在 IPFS 中打开
   const handleOpenInIpfs = useCallback(() => {
