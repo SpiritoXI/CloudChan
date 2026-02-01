@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Cloud, Copy, Check, Download, Folder, Trash2, ChevronDown, Globe, Pencil } from "lucide-react";
+import { Cloud, Copy, Check, Download, Folder, Trash2, ChevronDown, Globe, Pencil, Radio } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { FileRecord, Gateway } from "@/types";
@@ -14,6 +14,7 @@ interface FileListProps {
   isLoading: boolean;
   copiedId: string | number | null;
   selectedFiles: string[];
+  propagatingFiles?: Set<string>;
   onCopyCid: (cid: string, fileId: string | number) => void;
   onDownload: (cid: string, filename: string) => void;
   onDownloadWithGateway: (cid: string, filename: string, gateway: Gateway) => void;
@@ -24,6 +25,7 @@ interface FileListProps {
   onRename?: (file: FileRecord) => void;
   onToggleSelection?: (fileId: string) => void;
   onSelectAll?: () => void;
+  onPropagate?: (file: FileRecord) => void;
   gateways?: Gateway[];
 }
 
@@ -33,6 +35,7 @@ export function FileList({
   isLoading,
   copiedId,
   selectedFiles,
+  propagatingFiles = new Set(),
   onCopyCid,
   onDownload,
   onDownloadWithGateway,
@@ -43,6 +46,7 @@ export function FileList({
   onRename,
   onToggleSelection,
   onSelectAll,
+  onPropagate,
   gateways = [],
 }: FileListProps) {
   const [openGatewayMenuId, setOpenGatewayMenuId] = useState<string | number | null>(null);
@@ -257,6 +261,20 @@ export function FileList({
                     <Button
                       variant="ghost"
                       size="icon"
+                      className="h-8 w-8 text-blue-500"
+                      onClick={() => onPropagate?.(file)}
+                      disabled={propagatingFiles.has(String(file.id))}
+                      title="传播到其他网关"
+                    >
+                      {propagatingFiles.has(String(file.id)) ? (
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
+                      ) : (
+                        <Radio className="h-4 w-4" />
+                      )}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
                       className="h-8 w-8 text-destructive"
                       onClick={() => onDelete(file.id)}
                       title="删除"
@@ -417,6 +435,23 @@ export function FileList({
               title="重命名"
             >
               <Pencil className="h-3 w-3" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 bg-white/80 text-blue-500"
+              onClick={(e) => {
+                e.stopPropagation();
+                onPropagate?.(file);
+              }}
+              disabled={propagatingFiles.has(String(file.id))}
+              title="传播到其他网关"
+            >
+              {propagatingFiles.has(String(file.id)) ? (
+                <div className="h-3 w-3 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
+              ) : (
+                <Radio className="h-3 w-3" />
+              )}
             </Button>
             <Button
               variant="ghost"

@@ -43,15 +43,14 @@ export default function DashboardPage() {
     selectedFiles,
 
     // Data
-    files,
-    folders,
-    totalSize,
-    gateways,
-    customGateways,
+    files, folders, totalSize,
+    gateways, customGateways, savedGateways,
 
     // Upload
-    isUploading,
-    uploadProgress,
+    isUploading, uploadProgress,
+
+    // Propagation
+    propagatingFiles,
 
     // Modal States
     gatewayModalOpen,
@@ -127,18 +126,16 @@ export default function DashboardPage() {
     handleBatchMove,
     handleBatchDelete,
     handleBatchCopy,
-    setNewFolderName,
-    setEditingFolder,
-    setNewCid,
-    setNewCidName,
-    setNewCidSize,
-    setNewGatewayName,
-    setNewGatewayUrl,
-    setNewGatewayRegion,
-    setDarkMode,
-    setItemsPerPage,
-    setAutoRefresh,
+    handlePropagateFile,
+    setNewFolderName, setEditingFolder,
+    setNewCid, setNewCidName, setNewCidSize,
+    setNewGatewayName, setNewGatewayUrl, setNewGatewayRegion,
+    setDarkMode, setItemsPerPage, setAutoRefresh,
     setGateways,
+    // Saved Gateway Handlers
+    removeSavedGateway,
+    updateSavedGateway,
+    clearExpiredSavedGateways,
   } = useDashboard();
 
   // Computed values
@@ -240,6 +237,7 @@ export default function DashboardPage() {
             isLoading={isLoading}
             copiedId={copiedId}
             selectedFiles={selectedFiles}
+            propagatingFiles={propagatingFiles}
             onCopyCid={handleCopyCID}
             onDownload={(cid, filename) => handleDownload(cid, filename)}
             onDownloadWithGateway={(cid, filename, gatewayUrl) => handleDownloadWithGateway(cid, filename, gatewayUrl)}
@@ -256,6 +254,7 @@ export default function DashboardPage() {
             onRename={handleRenameFile}
             onToggleSelection={handleToggleSelection}
             onSelectAll={handleSelectAll}
+            onPropagate={handlePropagateFile}
             gateways={gateways}
           />
         </div>
@@ -276,6 +275,7 @@ export default function DashboardPage() {
         onClose={() => setGatewayModalOpen(false)}
         gateways={gateways}
         customGateways={customGateways}
+        savedGateways={savedGateways}
         isTesting={isTestingGateways}
         isFetchingPublic={isFetchingPublicGateways}
         onRefresh={handleRefreshGateways}
@@ -285,6 +285,14 @@ export default function DashboardPage() {
         onUpdate={setGateways}
         onFetchPublic={handleFetchPublicGateways}
         onCancelTest={handleCancelGatewayTest}
+        onRemoveSaved={removeSavedGateway}
+        onToggleSaved={(name) => {
+          const gateway = savedGateways.find(g => g.name === name);
+          if (gateway) {
+            updateSavedGateway(name, { enabled: !gateway.enabled });
+          }
+        }}
+        onClearExpired={clearExpiredSavedGateways}
       />
 
       <FolderModal

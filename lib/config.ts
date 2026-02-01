@@ -128,7 +128,7 @@ export const GATEWAY_TEST = {
   HIDE_UNAVAILABLE: false,
   CHECK_CACHE_KEY: 'cc_gateway_check_result_v3',
   CHECK_CACHE_EXPIRY: 10 * 60 * 1000,
-  CACHE_VERSION: '3.0',
+  CACHE_VERSION: '3.1',
 } as const;
 
 /**
@@ -199,6 +199,29 @@ export const UI = {
 } as const;
 
 /**
+ * 网关保存配置
+ * 用于长期保存连通性较好的网关
+ */
+export const GATEWAY_SAVE = {
+  // localStorage 存储键
+  STORAGE_KEY: 'cc_saved_gateways_v1',
+  // 保存网关的最小健康度分数 (0-100)
+  MIN_HEALTH_SCORE: 70,
+  // 保存网关的最小可靠性百分比 (0-100)
+  MIN_RELIABILITY: 80,
+  // 最大保存网关数量
+  MAX_SAVED_GATEWAYS: 10,
+  // 保存网关的最大延迟（毫秒）
+  MAX_LATENCY: 3000,
+  // 成功率阈值（百分比）
+  MIN_SUCCESS_RATE: 75,
+  // 保存网关的有效期（毫秒）- 30天
+  EXPIRY: 30 * 24 * 60 * 60 * 1000,
+  // 优先检测保存的网关
+  PRIORITY_SAVED_GATEWAYS: true,
+} as const;
+
+/**
  * 向后兼容的配置对象
  * @deprecated 请使用具体的配置对象
  */
@@ -214,6 +237,7 @@ export const CONFIG = {
   GATEWAY_FETCH_TEST,
   GATEWAY_TEST,
   GATEWAY_HEALTH,
+  GATEWAY_SAVE,
   UPLOAD,
   INTEGRITY_CHECK,
   SECURITY,

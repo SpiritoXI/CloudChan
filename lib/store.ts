@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { FileRecord, Folder, Gateway, ViewMode, StorageStats } from "@/types";
+import type { FileRecord, Folder, Gateway, SavedGateway, ViewMode, StorageStats } from "@/types";
 
 interface AuthState {
   isAuthenticated: boolean;
@@ -57,6 +57,7 @@ interface FileState {
 interface GatewayState {
   gateways: Gateway[];
   customGateways: Gateway[];
+  savedGateways: SavedGateway[];
   hideUnavailable: boolean;
   isTesting: boolean;
   lastTestTime: number | null;
@@ -64,6 +65,14 @@ interface GatewayState {
   addCustomGateway: (gateway: Gateway) => void;
   removeCustomGateway: (name: string) => void;
   updateGateway: (name: string, updates: Partial<Gateway>) => void;
+  // 保存网关相关操作
+  addSavedGateway: (gateway: SavedGateway) => void;
+  removeSavedGateway: (name: string) => void;
+  updateSavedGateway: (name: string, updates: Partial<SavedGateway>) => void;
+  getSavedGateways: () => SavedGateway[];
+  getEnabledSavedGateways: () => SavedGateway[];
+  clearExpiredSavedGateways: () => void;
+  incrementGatewayCheckCount: (name: string, success: boolean) => void;
   setHideUnavailable: (hide: boolean) => void;
   setIsTesting: (testing: boolean) => void;
   setLastTestTime: (time: number) => void;
@@ -304,6 +313,7 @@ export const useGatewayStore = create<GatewayState>()(
     (set, get) => ({
       gateways: [],
       customGateways: [],
+      savedGateways: [],
       hideUnavailable: false,
       isTesting: false,
       lastTestTime: null,
@@ -325,6 +335,83 @@ export const useGatewayStore = create<GatewayState>()(
       updateGateway: (name, updates) => {
         set((state) => ({
           gateways: state.gateways.map((g) => (g.name === name ? { ...g, ...updates } : g)),
+        }));
+      },
+
+      // 添加保存的网关
+      addSavedGateway: (gateway) => {
+        set((state) => {
+          const exists = state.savedGateways.find((g) => g.name === gateway.name);
+          if (exists) {
+            // 更新已存在的保存网关
+            return {
+              savedGateways: state.savedGateways.map((g) =>
+                g.name === gateway.name ? { ...g, ...gateway, savedAt: Date.now() } : g
+              ),
+            };
+          }
+          return {
+            savedGateways: [...state.savedGateways, gateway],
+          };
+        });
+      },
+
+      // 移除保存的网关
+      removeSavedGateway: (name) => {
+        set((state) => ({
+          savedGateways: state.savedGateways.filter((g) => g.name !== name),
+        }));
+      },
+
+      // 更新保存的网关
+      updateSavedGateway: (name, updates) => {
+        set((state) => ({
+          savedGateways: state.savedGateways.map((g) =>
+            g.name === name ? { ...g, ...updates } : g
+          ),
+        }));
+      },
+
+      // 获取所有保存的网关
+      getSavedGateways: () => {
+        return get().savedGateways;
+      },
+
+      // 获取启用的保存网关
+      getEnabledSavedGateways: () => {
+        return get().savedGateways.filter((g) => g.enabled);
+      },
+
+      // 清理过期的保存网关
+      clearExpiredSavedGateways: () => {
+        set((state) => {
+          const now = Date.now();
+          const { GATEWAY_SAVE } = require("./config");
+          return {
+            savedGateways: state.savedGateways.filter((g) => {
+              // 保留未过期的网关
+              const notExpired = now - g.savedAt < GATEWAY_SAVE.EXPIRY;
+              // 保留成功率达标的网关
+              const successRate = g.checkCount > 0 ? (g.successCount / g.checkCount) * 100 : 0;
+              const hasGoodRate = successRate >= GATEWAY_SAVE.MIN_SUCCESS_RATE;
+              return notExpired && hasGoodRate;
+            }),
+          };
+        });
+      },
+
+      // 增加网关检测计数
+      incrementGatewayCheckCount: (name, success) => {
+        set((state) => ({
+          savedGateways: state.savedGateways.map((g) =>
+            g.name === name
+              ? {
+                  ...g,
+                  checkCount: g.checkCount + 1,
+                  successCount: success ? g.successCount + 1 : g.successCount,
+                }
+              : g
+          ),
         }));
       },
 
@@ -357,6 +444,7 @@ export const useGatewayStore = create<GatewayState>()(
       partialize: (state) => ({
         gateways: state.gateways,
         customGateways: state.customGateways,
+        savedGateways: state.savedGateways,
         hideUnavailable: state.hideUnavailable,
         lastTestTime: state.lastTestTime,
       }),

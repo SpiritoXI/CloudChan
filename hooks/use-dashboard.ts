@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { uploadApi, api, gatewayApi } from "@/lib/api";
+import { uploadApi, api, gatewayApi, propagationApi } from "@/lib/api";
 import { CONFIG } from "@/lib/config";
 import { useFileStore, useGatewayStore, useUIStore } from "@/lib/store";
 import { generateId, formatFileSize, copyToClipboard } from "@/lib/utils";
@@ -28,6 +28,10 @@ export function useDashboard() {
     gateways, // 从 store 获取 gateways
     setGateways, // 从 store 获取 setGateways
     customGateways, // 从 store 获取 customGateways
+    savedGateways, // 从 store 获取 savedGateways
+    removeSavedGateway,
+    updateSavedGateway,
+    clearExpiredSavedGateways,
   } = useGatewayStore();
 
   // UI State
@@ -76,6 +80,9 @@ export function useDashboard() {
   const [selectedFileToRename, setSelectedFileToRename] = useState<FileRecord | null>(null);
   const [previewFile, setPreviewFile] = useState<FileRecord | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
+
+  // 传播状态
+  const [propagatingFiles, setPropagatingFiles] = useState<Set<string>>(new Set());
 
   // 使用 ref 来防止重复加载
   const dataLoadedRef = useRef(false);
@@ -231,6 +238,19 @@ export function useDashboard() {
             await api.saveFile(fileRecord);
             setFiles((prev) => [fileRecord, ...prev]);
             showToast(`文件 ${safeName} 上传成功`, "success");
+
+            // 后台静默传播文件到其他网关
+            if (gateways.length > 0) {
+              propagationApi.backgroundPropagate(result.cid, gateways, {
+                maxGateways: 8,
+                timeout: 15000,
+                onComplete: (propResult) => {
+                  if (propResult.success.length > 0) {
+                    console.log(`文件已传播到 ${propResult.success.length} 个网关`);
+                  }
+                },
+              });
+            }
 
             // 后台快速验证文件完整性
             uploadApi.verifyFile(result.cid).then((verifyResult) => {
@@ -831,6 +851,44 @@ export function useDashboard() {
     setSelectedFiles([]);
   }, [selectedFiles.length, showToast]);
 
+  // Handle propagate file to gateways
+  const handlePropagateFile = useCallback(async (file: FileRecord) => {
+    if (propagatingFiles.has(String(file.id))) return;
+
+    const availableGateways = gateways.filter(g => g.available);
+    if (availableGateways.length === 0) {
+      showToast("没有可用的网关", "error");
+      return;
+    }
+
+    setPropagatingFiles(prev => new Set(prev).add(String(file.id)));
+    showToast(`开始传播文件到 ${availableGateways.length} 个网关...`, "info");
+
+    try {
+      const result = await propagationApi.smartPropagate(file.cid, availableGateways, {
+        maxGateways: 10,
+        timeout: 20000,
+        onProgress: (gateway, status) => {
+          console.log(`[Propagation] ${gateway.name}: ${status}`);
+        },
+      });
+
+      if (result.success.length > 0) {
+        showToast(`文件已成功传播到 ${result.success.length}/${result.total} 个网关`, "success");
+      } else {
+        showToast("文件传播失败，请稍后重试", "error");
+      }
+    } catch {
+      showToast("文件传播失败", "error");
+    } finally {
+      setPropagatingFiles(prev => {
+        const next = new Set(prev);
+        next.delete(String(file.id));
+        return next;
+      });
+    }
+  }, [gateways, propagatingFiles, showToast]);
+
   return {
     // UI State
     searchQuery, setSearchQuery,
@@ -841,10 +899,13 @@ export function useDashboard() {
 
     // Data
     files, folders, totalSize,
-    gateways, customGateways,
+    gateways, customGateways, savedGateways,
 
     // Upload
     isUploading, uploadProgress,
+
+    // Propagation
+    propagatingFiles,
 
     // Modal States
     gatewayModalOpen, setGatewayModalOpen,
@@ -900,5 +961,10 @@ export function useDashboard() {
     handleBatchMove,
     handleBatchDelete,
     handleBatchCopy,
+    handlePropagateFile,
+    // Saved Gateway Handlers
+    removeSavedGateway,
+    updateSavedGateway,
+    clearExpiredSavedGateways,
   };
 }

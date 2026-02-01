@@ -100,6 +100,47 @@ export interface GatewayHealth {
   lastChecked: number;
 }
 
+/**
+ * 已保存的优质网关记录
+ * 用于长期保存连通性较好的网关，优先检测
+ */
+export interface SavedGateway {
+  name: string;
+  url: string;
+  icon: string;
+  region: GatewayRegion;
+  // 保存时的性能指标
+  savedLatency: number;
+  savedReliability: number;
+  savedHealthScore: number;
+  // 保存时间
+  savedAt: number;
+  // 成功次数统计（用于评估是否继续保持）
+  successCount: number;
+  // 检测次数统计
+  checkCount: number;
+  // 是否启用
+  enabled: boolean;
+}
+
+/**
+ * 网关保存配置
+ */
+export interface GatewaySaveConfig {
+  // 保存网关的最小健康度分数
+  minHealthScore: number;
+  // 保存网关的最小可靠性百分比
+  minReliability: number;
+  // 最大保存网关数量
+  maxSavedGateways: number;
+  // 保存网关的最大延迟（毫秒）
+  maxLatency: number;
+  // 检测次数阈值（超过此次数且成功率达标才保存）
+  minCheckCount: number;
+  // 成功率阈值（百分比）
+  minSuccessRate: number;
+}
+
 // ============================================
 // 上传相关类型
 // ============================================

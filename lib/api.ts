@@ -1,6 +1,6 @@
 import { CONFIG } from "./config";
-import type { FileRecord, Folder, ApiResponse, Gateway } from "@/types";
-import { useAuthStore } from "./store";
+import type { FileRecord, Folder, ApiResponse, Gateway, SavedGateway } from "@/types";
+import { useAuthStore, useGatewayStore } from "./store";
 
 class ApiError extends Error {
   constructor(
@@ -885,7 +885,7 @@ export const gatewayApi = {
     );
   },
 
-  // 自动检测网关（带缓存机制）
+  // 自动检测网关（带缓存机制，优先检测已保存的网关）
   async autoTestGateways(
     customGateways: Gateway[] = [],
     forceRefresh: boolean = false,
@@ -925,14 +925,47 @@ export const gatewayApi = {
       }
     }
 
-    // 如果没有缓存或没有可用网关，执行检测
-    const allGateways = [...CONFIG.DEFAULT_GATEWAYS];
+    // 清理过期的保存网关
+    this.cleanupSavedGateways();
+
+    // ========== 新模式：优先检测已保存的网关 ==========
+    let allResults: Gateway[] = [];
+    const savedGatewayUrls = new Set<string>();
+
+    // 1. 首先检测已保存的优质网关
+    if (CONFIG.GATEWAY_SAVE.PRIORITY_SAVED_GATEWAYS) {
+      const savedResults = await this.testSavedGatewaysFirst(onProgress);
+      allResults = [...savedResults];
+      savedResults.forEach((g) => savedGatewayUrls.add(g.url));
+
+      // 如果保存的网关中有足够可用的，可以直接返回（快速模式）
+      const availableSavedCount = savedResults.filter((g) => g.available).length;
+      if (availableSavedCount >= 3) {
+        console.log(`[Gateway] 已保存网关中有 ${availableSavedCount} 个可用，使用快速模式`);
+        // 保存检测结果
+        this.cacheResults(allResults);
+        return allResults.sort((a, b) => {
+          if (a.available !== b.available) return a.available ? -1 : 1;
+          return (a.latency || Infinity) - (b.latency || Infinity);
+        });
+      }
+    }
+
+    // 2. 检测其他网关（默认网关 + 公共网关 + 自定义网关）
+    const allGateways: Gateway[] = [];
+
+    // 添加默认网关（排除已检测过的保存网关）
+    CONFIG.DEFAULT_GATEWAYS.forEach((gateway) => {
+      if (!savedGatewayUrls.has(gateway.url)) {
+        allGateways.push(gateway);
+      }
+    });
 
     // 从公共网关源获取更多网关
     try {
       const publicGateways = await this.fetchPublicGateways();
       publicGateways.forEach((publicGateway) => {
-        if (!allGateways.find((g) => g.url === publicGateway.url)) {
+        if (!allGateways.find((g) => g.url === publicGateway.url) && !savedGatewayUrls.has(publicGateway.url)) {
           allGateways.push(publicGateway);
         }
       });
@@ -942,7 +975,7 @@ export const gatewayApi = {
 
     // 添加自定义网关
     customGateways.forEach((custom) => {
-      if (!allGateways.find((g) => g.url === custom.url)) {
+      if (!allGateways.find((g) => g.url === custom.url) && !savedGatewayUrls.has(custom.url)) {
         allGateways.push(custom);
       }
     });
@@ -954,16 +987,22 @@ export const gatewayApi = {
     }));
 
     // 执行检测
-    const results = await this.testAllGateways(gatewaysWithHistory, {
+    const otherResults = await this.testAllGateways(gatewaysWithHistory, {
       onProgress,
       priorityRegions,
     });
 
-    // 保存结果和健康度历史
-    this.cacheResults(results);
-    this.saveHealthHistory(results);
+    // 合并结果
+    allResults = [...allResults, ...otherResults];
 
-    return results;
+    // 3. 保存新发现的优质网关
+    this.saveGoodGateways(otherResults);
+
+    // 保存结果和健康度历史
+    this.cacheResults(allResults);
+    this.saveHealthHistory(allResults);
+
+    return allResults;
   },
 
   // 加载健康度历史
@@ -1234,6 +1273,177 @@ export const gatewayApi = {
 
     // 回退到普通延迟排序
     return availableGateways.sort((a, b) => (a.latency || Infinity) - (b.latency || Infinity))[0];
+  },
+
+  // ==================== 保存网关相关方法 ====================
+
+  /**
+   * 判断网关是否应该被保存
+   */
+  shouldSaveGateway(gateway: Gateway): boolean {
+    const { GATEWAY_SAVE } = CONFIG;
+    
+    // 必须可用
+    if (!gateway.available) return false;
+    
+    // 健康度达标
+    if ((gateway.healthScore || 0) < GATEWAY_SAVE.MIN_HEALTH_SCORE) return false;
+    
+    // 可靠性达标
+    if ((gateway.reliability || 0) < GATEWAY_SAVE.MIN_RELIABILITY) return false;
+    
+    // 延迟达标
+    if ((gateway.latency || Infinity) > GATEWAY_SAVE.MAX_LATENCY) return false;
+    
+    return true;
+  },
+
+  /**
+   * 将网关转换为保存网关格式
+   */
+  convertToSavedGateway(gateway: Gateway): SavedGateway {
+    return {
+      name: gateway.name,
+      url: gateway.url,
+      icon: gateway.icon,
+      region: gateway.region,
+      savedLatency: gateway.latency || 0,
+      savedReliability: gateway.reliability || 0,
+      savedHealthScore: gateway.healthScore || 0,
+      savedAt: Date.now(),
+      successCount: 1,
+      checkCount: 1,
+      enabled: true,
+    };
+  },
+
+  /**
+   * 将保存网关转换为普通网关格式
+   */
+  convertFromSavedGateway(saved: SavedGateway): Gateway {
+    return {
+      name: saved.name,
+      url: saved.url,
+      icon: saved.icon,
+      priority: 1, // 保存的网关优先级最高
+      region: saved.region,
+      latency: saved.savedLatency,
+      available: true, // 假设保存的网关是可用的，需要重新检测确认
+      reliability: saved.savedReliability,
+      healthScore: saved.savedHealthScore,
+      lastChecked: saved.savedAt,
+    };
+  },
+
+  /**
+   * 保存优质网关到本地存储
+   */
+  saveGoodGateways(gateways: Gateway[]): void {
+    const store = useGatewayStore.getState();
+    let savedCount = 0;
+
+    gateways.forEach((gateway) => {
+      if (this.shouldSaveGateway(gateway)) {
+        const savedGateway = this.convertToSavedGateway(gateway);
+        store.addSavedGateway(savedGateway);
+        savedCount++;
+      }
+    });
+
+    if (savedCount > 0) {
+      console.log(`[Gateway] 已保存 ${savedCount} 个优质网关`);
+    }
+  },
+
+  /**
+   * 获取保存的网关列表
+   */
+  getSavedGateways(): SavedGateway[] {
+    const store = useGatewayStore.getState();
+    return store.getEnabledSavedGateways();
+  },
+
+  /**
+   * 清理过期的保存网关
+   */
+  cleanupSavedGateways(): void {
+    const store = useGatewayStore.getState();
+    store.clearExpiredSavedGateways();
+    console.log('[Gateway] 已清理过期保存网关');
+  },
+
+  /**
+   * 更新保存网关的检测结果
+   */
+  updateSavedGatewayResult(name: string, success: boolean, latency?: number): void {
+    const store = useGatewayStore.getState();
+    store.incrementGatewayCheckCount(name, success);
+    
+    if (success && latency !== undefined) {
+      store.updateSavedGateway(name, { savedLatency: latency });
+    }
+  },
+
+  /**
+   * 优先检测保存的网关，返回检测结果
+   */
+  async testSavedGatewaysFirst(
+    onProgress?: (gateway: Gateway, result: Gateway) => void
+  ): Promise<Gateway[]> {
+    const savedGateways = this.getSavedGateways();
+    
+    if (savedGateways.length === 0) {
+      return [];
+    }
+
+    console.log(`[Gateway] 优先检测 ${savedGateways.length} 个已保存的优质网关`);
+
+    // 将保存网关转换为普通网关格式
+    const gatewaysToTest = savedGateways.map((saved) => this.convertFromSavedGateway(saved));
+
+    // 快速检测保存的网关
+    const results: Gateway[] = [];
+    
+    for (const gateway of gatewaysToTest) {
+      try {
+        const result = await this.testGateway(gateway, {
+          retries: 1,
+          samples: 2,
+        });
+
+        const gatewayResult: Gateway = {
+          ...gateway,
+          available: result.available,
+          latency: result.latency,
+          reliability: result.reliability,
+          corsEnabled: result.corsEnabled,
+          rangeSupport: result.rangeSupport,
+          lastChecked: Date.now(),
+          healthScore: result.available ? this.calculateHealthScore(gateway, result) : 0,
+        };
+
+        // 更新保存网关的检测结果统计
+        this.updateSavedGatewayResult(gateway.name, result.available, result.latency);
+
+        results.push(gatewayResult);
+        onProgress?.(gateway, gatewayResult);
+      } catch {
+        // 检测失败，标记为不可用
+        const failedResult: Gateway = {
+          ...gateway,
+          available: false,
+          lastChecked: Date.now(),
+        };
+        this.updateSavedGatewayResult(gateway.name, false);
+        results.push(failedResult);
+        onProgress?.(gateway, failedResult);
+      }
+    }
+
+    const availableCount = results.filter((g) => g.available).length;
+    console.log(`[Gateway] 保存网关检测完成，${availableCount}/${results.length} 个可用`);
+
+    return results;
   },
 };
 
