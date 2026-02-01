@@ -416,15 +416,17 @@ export function MediaPlayer({ cid, filename, gateways, onGatewaySwitch }: MediaP
               <AlertCircle className="h-4 w-4" />
               <span>{error}</span>
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={switchToNextGateway}
-              className="text-red-400 hover:text-red-300"
-            >
-              <RefreshCw className="h-4 w-4 mr-1" />
-              切换网关
-            </Button>
+            {availableGateways.length > 1 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={switchToNextGateway}
+                className="text-red-400 hover:text-red-300"
+              >
+                <RefreshCw className="h-4 w-4 mr-1" />
+                切换网关
+              </Button>
+            )}
           </div>
         )}
 
@@ -667,9 +669,11 @@ export function MediaPlayer({ cid, filename, gateways, onGatewaySwitch }: MediaP
                 <RefreshCw className="h-4 w-4 mr-1" />
                 重试
               </Button>
-              <Button variant="default" size="sm" onClick={switchToNextGateway}>
-                切换网关
-              </Button>
+              {availableGateways.length > 1 && (
+                <Button variant="default" size="sm" onClick={switchToNextGateway}>
+                  切换网关
+                </Button>
+              )}
             </div>
           </div>
         </div>

@@ -416,35 +416,28 @@ export function useDashboard() {
   const handleFetchPublicGateways = useCallback(async () => {
     setIsFetchingPublicGateways(true);
     try {
+      // fetchPublicGateways 现在会自动进行快速测试
       const publicGateways = await gatewayApi.fetchPublicGateways();
 
       if (publicGateways.length === 0) {
-        showToast("未获取到新的公共网关", "info");
+        showToast("未获取到可用的公共网关", "info");
         return;
       }
 
-      // 检测新获取的公共网关
-      setIsTestingGateways(true);
-      showToast(`获取到 ${publicGateways.length} 个公共网关，正在检测...`, "info");
-
-      const testedPublicGateways = await gatewayApi.testAllGateways(publicGateways);
+      showToast(`成功获取 ${publicGateways.length} 个可用公共网关`, "success");
 
       // 合并网关，去重
-      const allGateways = [...gateways, ...testedPublicGateways];
+      const allGateways = [...gateways, ...publicGateways];
       const uniqueGateways = allGateways.filter(
         (gateway, index, self) => index === self.findIndex((g) => g.url === gateway.url)
       );
 
       setGateways(uniqueGateways);
       gatewayApi.cacheResults(uniqueGateways);
-
-      const availableCount = testedPublicGateways.filter(g => g.available).length;
-      showToast(`公共网关获取完成，${availableCount} 个可用`, "success");
     } catch {
       showToast("获取公共网关失败", "error");
     } finally {
       setIsFetchingPublicGateways(false);
-      setIsTestingGateways(false);
     }
   }, [gateways, setGateways, showToast]);
 

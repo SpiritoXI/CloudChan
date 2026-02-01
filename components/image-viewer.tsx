@@ -436,9 +436,11 @@ export function ImageViewer({ cid, filename, gateways, onClose, onDownload }: Im
                   <RefreshCw className="h-4 w-4 mr-1" />
                   重试
                 </Button>
-                <Button variant="default" size="sm" onClick={switchToNextGateway}>
-                  切换网关
-                </Button>
+                {effectiveGateways.length > 1 && (
+                  <Button variant="default" size="sm" onClick={switchToNextGateway}>
+                    切换网关
+                  </Button>
+                )}
               </div>
             </div>
           </div>

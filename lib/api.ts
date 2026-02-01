@@ -477,9 +477,10 @@ export const uploadApi = {
 
 export const gatewayApi = {
   async fetchPublicGateways(): Promise<Gateway[]> {
-    const gateways: Gateway[] = [];
+    const allGateways: Gateway[] = [];
     const seenUrls = new Set<string>();
 
+    // 从多个源获取网关
     for (const source of CONFIG.PUBLIC_GATEWAY_SOURCES) {
       try {
         const controller = new AbortController();
@@ -516,7 +517,7 @@ export const gatewayApi = {
                 hostname.includes("ipfsscan") ||
                 hostname.includes("cf-ipfs");
 
-              gateways.push({
+              allGateways.push({
                 name: hostname.replace(/^www\./, "").split(".")[0],
                 url: gatewayUrl,
                 icon: "🌐",
@@ -525,15 +526,74 @@ export const gatewayApi = {
               });
             }
           });
-
-          break;
         }
       } catch {
+        // 继续尝试下一个源
         continue;
       }
     }
 
-    return gateways;
+    // 快速测试网关可用性
+    if (allGateways.length > 0) {
+      console.log(`[Gateway] 从公共源获取了 ${allGateways.length} 个网关，开始快速测试...`);
+      const testedGateways = await this.quickTestGateways(allGateways);
+      console.log(`[Gateway] 快速测试完成，${testedGateways.filter(g => g.available).length} 个网关可用`);
+      return testedGateways.filter(g => g.available);
+    }
+
+    return allGateways;
+  },
+
+  /**
+   * 快速测试网关可用性
+   */
+  async quickTestGateways(gateways: Gateway[]): Promise<Gateway[]> {
+    const { GATEWAY_FETCH_TEST } = CONFIG;
+    const testCid = CONFIG.TEST_CID;
+    const results: Gateway[] = [];
+
+    // 分批并发测试
+    const batchSize = GATEWAY_FETCH_TEST.MAX_CONCURRENT;
+    for (let i = 0; i < gateways.length && results.filter(g => g.available).length < GATEWAY_FETCH_TEST.MAX_GATEWAYS; i += batchSize) {
+      const batch = gateways.slice(i, i + batchSize);
+
+      const batchResults = await Promise.all(
+        batch.map(async (gateway) => {
+          try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), GATEWAY_FETCH_TEST.TIMEOUT);
+
+            const startTime = performance.now();
+            const response = await fetch(`${gateway.url}${testCid}`, {
+              method: "HEAD",
+              signal: controller.signal,
+            });
+            const latency = Math.round(performance.now() - startTime);
+            clearTimeout(timeoutId);
+
+            if (response.ok || response.status === 405) {
+              return {
+                ...gateway,
+                available: true,
+                latency,
+                lastChecked: Date.now(),
+              };
+            }
+          } catch {
+            // 测试失败
+          }
+          return { ...gateway, available: false };
+        })
+      );
+
+      results.push(...batchResults);
+    }
+
+    // 按延迟排序，优先返回延迟低的网关
+    return results
+      .filter(g => g.available)
+      .sort((a, b) => (a.latency || Infinity) - (b.latency || Infinity))
+      .slice(0, GATEWAY_FETCH_TEST.MAX_GATEWAYS);
   },
 
   async testGateway(
