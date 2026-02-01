@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { FileRecord, Folder, Gateway, SavedGateway, ViewMode, StorageStats } from "@/types";
+import { DEFAULT_GATEWAYS } from "@/lib/config";
 
 interface AuthState {
   isAuthenticated: boolean;
@@ -311,7 +312,7 @@ export const useFileStore = create<FileState>()((set, get) => ({
 export const useGatewayStore = create<GatewayState>()(
   persist(
     (set, get) => ({
-      gateways: [],
+      gateways: [...DEFAULT_GATEWAYS], // 初始化为默认网关
       customGateways: [],
       savedGateways: [],
       hideUnavailable: false,
@@ -423,7 +424,9 @@ export const useGatewayStore = create<GatewayState>()(
 
       getAllGateways: () => {
         const { gateways, customGateways } = get();
-        return [...customGateways, ...gateways];
+        // 如果 gateways 为空，使用默认网关
+        const effectiveGateways = gateways.length > 0 ? gateways : [...DEFAULT_GATEWAYS];
+        return [...customGateways, ...effectiveGateways];
       },
 
       getAvailableGateways: () => {

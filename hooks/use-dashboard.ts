@@ -891,7 +891,7 @@ export function useDashboard() {
   }, [selectedFiles.length, showToast]);
 
   // Handle propagate file to gateways
-  const handlePropagateFile = useCallback(async (file: FileRecord) => {
+  const handlePropagateFile = useCallback(async (file: FileRecord, propagateToAll: boolean = false) => {
     if (propagatingFiles.has(String(file.id))) return;
 
     // 使用所有网关进行传播，不仅限于当前可用的网关
@@ -902,24 +902,44 @@ export function useDashboard() {
     }
 
     setPropagatingFiles(prev => new Set(prev).add(String(file.id)));
-    showToast(`开始传播文件到 ${allGateways.length} 个网关...`, "info");
+    
+    if (propagateToAll) {
+      showToast(`开始传播文件到所有 ${allGateways.length} 个网关...`, "info");
+    } else {
+      showToast(`开始智能传播文件到 ${Math.min(10, allGateways.length)} 个优选网关...`, "info");
+    }
 
     try {
-      const result = await propagationApi.smartPropagate(file.cid, allGateways, {
-        maxGateways: 10,
-        timeout: 20000,
-        onProgress: (gateway, status) => {
-          console.log(`[Propagation] ${gateway.name}: ${status}`);
-        },
-      });
+      let result;
+      if (propagateToAll) {
+        // 传播到所有网关
+        result = await propagationApi.propagateToAllGateways(file.cid, allGateways, {
+          timeout: 20000,
+          onProgress: (gateway, status) => {
+            console.log(`[Propagation] ${gateway.name}: ${status}`);
+          },
+        });
+      } else {
+        // 智能传播到优选网关（最多10个）
+        result = await propagationApi.smartPropagate(file.cid, allGateways, {
+          maxGateways: 10,
+          timeout: 20000,
+          onProgress: (gateway, status) => {
+            console.log(`[Propagation] ${gateway.name}: ${status}`);
+          },
+        });
+      }
+
+      console.log(`[Propagation] Result for ${file.cid.slice(0, 16)}...:`, result);
 
       if (result.success.length > 0) {
         showToast(`文件已成功传播到 ${result.success.length}/${result.total} 个网关`, "success");
       } else {
-        showToast("文件传播失败，请稍后重试", "error");
+        showToast(`文件传播失败，${result.failed.length} 个网关不可用`, "error");
       }
-    } catch {
-      showToast("文件传播失败", "error");
+    } catch (error) {
+      console.error(`[Propagation] Error for ${file.cid.slice(0, 16)}...:`, error);
+      showToast("文件传播失败: " + (error instanceof Error ? error.message : "未知错误"), "error");
     } finally {
       setPropagatingFiles(prev => {
         const next = new Set(prev);

@@ -1604,8 +1604,8 @@ export const propagationApi = {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-        // 使用 HEAD 请求来预热网关缓存
-        const response = await fetch(`${gateway.url}${cid}`, {
+        // 尝试使用 HEAD 请求来预热网关缓存
+        let response = await fetch(`${gateway.url}${cid}`, {
           method: 'HEAD',
           signal: controller.signal,
           // 添加缓存控制头，确保获取最新内容
@@ -1614,9 +1614,28 @@ export const propagationApi = {
           },
         });
 
+        // 如果 HEAD 请求失败（405 或其他错误），尝试 GET 请求
+        if (!response.ok && response.status !== 200) {
+          controller.abort(); // 取消之前的请求
+          const getController = new AbortController();
+          const getTimeoutId = setTimeout(() => getController.abort(), timeout);
+          
+          response = await fetch(`${gateway.url}${cid}`, {
+            method: 'GET',
+            signal: getController.signal,
+            headers: {
+              'Cache-Control': 'no-cache',
+              'Range': 'bytes=0-0', // 只请求第一个字节，减少数据传输
+            },
+          });
+          
+          clearTimeout(getTimeoutId);
+        }
+
         clearTimeout(timeoutId);
 
-        if (response.ok) {
+        // 只要响应成功（200-299）或者是 206 Partial Content，都认为传播成功
+        if (response.ok || response.status === 206) {
           success.push(gateway);
           onProgress?.(gateway, 'success');
         } else {
@@ -1703,6 +1722,31 @@ export const propagationApi = {
         console.error(`[Propagation] Failed for CID ${cid.slice(0, 16)}...:`, error);
       });
     }, 100);
+  },
+
+  /**
+   * 传播到所有网关 - 不限数量，传播到所有记录的网关
+   */
+  async propagateToAllGateways(
+    cid: string,
+    gateways: Gateway[],
+    options: {
+      timeout?: number;
+      onProgress?: (gateway: Gateway, status: 'pending' | 'success' | 'failed') => void;
+    } = {}
+  ): Promise<{
+    success: Gateway[];
+    failed: Gateway[];
+    total: number;
+  }> {
+    const { timeout = 20000, onProgress } = options;
+    
+    // 直接使用所有网关，不限数量
+    return this.propagateToGateways(cid, gateways, {
+      maxConcurrent: 5,
+      timeout,
+      onProgress,
+    });
   },
 };
 
