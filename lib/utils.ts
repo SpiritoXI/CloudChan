@@ -297,6 +297,147 @@ export function copyToClipboard(text: string): Promise<boolean> {
     .catch(() => false);
 }
 
+/**
+ * CID 格式验证结果
+ */
+export interface CidValidationResult {
+  valid: boolean;
+  type: 'v0' | 'v1' | null;
+  error?: string;
+}
+
+/**
+ * 验证 CID 格式
+ * @param cid - CID 字符串
+ * @returns 验证结果
+ */
+export function validateCidFormat(cid: string): CidValidationResult {
+  if (!cid || typeof cid !== 'string') {
+    return { valid: false, type: null, error: 'CID不能为空' };
+  }
+
+  const trimmedCid = cid.trim();
+
+  if (trimmedCid.length === 0) {
+    return { valid: false, type: null, error: 'CID不能为空' };
+  }
+
+  // CID v0: Qm开头，46字符长度 (Qm + 44 Base58)
+  const cidV0Pattern = /^Qm[1-9A-HJ-NP-Za-km-z]{44}$/;
+  // CID v1: bafy/bafk/bafz/baga等开头，Base32编码
+  const cidV1Pattern = /^baf[a-z0-9]{52,}$/;
+  // 其他可能的CID v1格式
+  const cidV1AltPattern = /^k[2-7a-z]{58,}$/;
+
+  if (cidV0Pattern.test(trimmedCid)) {
+    return { valid: true, type: 'v0' };
+  }
+
+  if (cidV1Pattern.test(trimmedCid) || cidV1AltPattern.test(trimmedCid)) {
+    return { valid: true, type: 'v1' };
+  }
+
+  return { valid: false, type: null, error: '无效的CID格式' };
+}
+
+/**
+ * 从各种格式的输入中提取 CID
+ * 支持的格式：
+ * - 纯CID: Qm... 或 bafy...
+ * - IPFS协议: ipfs://Qm... 或 ipfs://bafy...
+ * - IPFS路径: /ipfs/Qm... 或 /ipfs/bafy...
+ * - 完整URL: https://gateway.com/ipfs/Qm... 或 https://gateway.com/ipfs/bafy...
+ * @param input - 用户输入的字符串
+ * @returns 提取到的CID或null
+ */
+export function extractCidFromInput(input: string): string | null {
+  if (!input || typeof input !== 'string') return null;
+
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+
+  // CID v0 和 v1 的正则表达式
+  const cidV0Pattern = /Qm[1-9A-HJ-NP-Za-km-z]{44}/;
+  const cidV1Pattern = /baf[a-z0-9]{52,}/;
+  const cidV1AltPattern = /k[2-7a-z]{58,}/;
+
+  // 尝试匹配 CID v0
+  const v0Match = trimmed.match(cidV0Pattern);
+  if (v0Match) return v0Match[0];
+
+  // 尝试匹配 CID v1
+  const v1Match = trimmed.match(cidV1Pattern);
+  if (v1Match) return v1Match[0];
+
+  // 尝试匹配其他 CID v1 格式
+  const v1AltMatch = trimmed.match(cidV1AltPattern);
+  if (v1AltMatch) return v1AltMatch[0];
+
+  return null;
+}
+
+/**
+ * 从文件名推断文件类型
+ * @param filename - 文件名
+ * @returns 文件类型描述
+ */
+export function inferFileType(filename: string): string {
+  const ext = getFileExtension(filename);
+  const typeMap: Record<string, string> = {
+    pdf: 'PDF文档',
+    doc: 'Word文档',
+    docx: 'Word文档',
+    xls: 'Excel表格',
+    xlsx: 'Excel表格',
+    ppt: 'PPT演示',
+    pptx: 'PPT演示',
+    jpg: '图片',
+    jpeg: '图片',
+    png: '图片',
+    gif: '图片',
+    webp: '图片',
+    svg: '矢量图',
+    mp4: '视频',
+    avi: '视频',
+    mov: '视频',
+    mkv: '视频',
+    webm: '视频',
+    mp3: '音频',
+    wav: '音频',
+    flac: '音频',
+    ogg: '音频',
+    aac: '音频',
+    zip: '压缩包',
+    rar: '压缩包',
+    '7z': '压缩包',
+    tar: '压缩包',
+    gz: '压缩包',
+    js: 'JavaScript',
+    ts: 'TypeScript',
+    jsx: 'React组件',
+    tsx: 'React组件',
+    html: 'HTML页面',
+    css: '样式表',
+    json: 'JSON数据',
+    md: 'Markdown文档',
+    txt: '文本文件',
+  };
+  return typeMap[ext] || '文件';
+}
+
+/**
+ * 格式化字节大小为人类可读格式（带单位）
+ * @param bytes - 字节数
+ * @returns 格式化后的字符串
+ */
+export function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
 export function buildTree(folders: Array<{ id: string; name: string; parentId: string | null }>): Array<{
   id: string;
   name: string;

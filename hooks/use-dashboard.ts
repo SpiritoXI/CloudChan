@@ -58,6 +58,7 @@ export function useDashboard() {
   const [newCidSize, setNewCidSize] = useState("");
   const [isAddingCid, setIsAddingCid] = useState(false);
   const [isDetectingCid, setIsDetectingCid] = useState(false);
+  const [detectedCidInfo, setDetectedCidInfo] = useState<{ cid: string; name: string; size: number; isDirectory: boolean; valid: boolean; error?: string } | null>(null);
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
   const [itemsPerPage, setItemsPerPage] = useState<number>(20);
@@ -563,6 +564,47 @@ export function useDashboard() {
     [selectedFileToMove, files, showToast]
   );
 
+  // Handle detect CID info
+  const handleDetectCid = useCallback(async (cid: string) => {
+    if (!cid.trim()) return;
+
+    setIsDetectingCid(true);
+    try {
+      const metadata = await api.fetchCidInfo(cid);
+      const metadataWithCid: typeof detectedCidInfo = metadata 
+        ? { ...metadata, cid }
+        : { cid, name: "", size: 0, isDirectory: false, valid: false, error: "无法获取文件信息" };
+      setDetectedCidInfo(metadataWithCid);
+
+      // 如果检测成功且用户没有手动填写，自动填充文件名和大小
+      if (metadata?.valid) {
+        if (metadata.name && !newCidName) {
+          setNewCidName(metadata.name);
+        }
+        if (metadata.size > 0 && !newCidSize) {
+          setNewCidSize(metadata.size.toString());
+        }
+      }
+
+      // 如果检测有警告信息，显示提示
+      if (metadata?.error) {
+        showToast(metadata.error, "warning");
+      }
+    } catch {
+      setDetectedCidInfo({
+        cid,
+        name: "",
+        size: 0,
+        isDirectory: false,
+        valid: false,
+        error: "无法自动检测文件信息，请手动填写",
+      });
+      showToast("无法自动检测文件信息，请手动填写", "warning");
+    } finally {
+      setIsDetectingCid(false);
+    }
+  }, [newCidName, newCidSize, showToast]);
+
   // Handle add CID
   const handleAddCid = useCallback(async () => {
     if (!newCid.trim()) {
@@ -577,42 +619,37 @@ export function useDashboard() {
       const userInputSize = newCidSize ? (parseInt(newCidSize) || 0) : 0;
       let size = userInputSize;
 
-      // 检测CID信息和验证
-      setIsDetectingCid(true);
-      let metadata: { name: string; size: number; isDirectory: boolean; valid: boolean; error?: string } | null = null;
-      try {
-        metadata = await api.fetchCidInfo(newCid);
+      // 使用已检测的信息或重新检测
+      let metadata = detectedCidInfo;
+      if (!metadata || metadata.cid !== newCid.trim()) {
+        setIsDetectingCid(true);
+        try {
+          const fetchedMetadata = await api.fetchCidInfo(newCid);
+          if (fetchedMetadata) {
+            metadata = { ...fetchedMetadata, cid: newCid.trim() };
+            setDetectedCidInfo(metadata);
+          }
 
-        // 如果CID格式无效，显示错误
-        if (metadata && !metadata.valid) {
-          showToast(metadata.error || "无效的CID格式", "error");
-          return;
+          // 如果CID格式无效，显示错误
+          if (metadata && !metadata.valid) {
+            showToast(metadata.error || "无效的CID格式", "error");
+            return;
+          }
+        } catch {
+          // 检测失败但继续添加
+        } finally {
+          setIsDetectingCid(false);
         }
-
-        // 如果用户没有输入文件名，使用检测到的名称
-        if (!name && metadata?.name) {
-          name = metadata.name;
-        }
-
-        // 如果用户没有输入大小，使用检测到的大小
-        if (!userInputSize && metadata?.size) {
-          size = metadata.size;
-        }
-
-        // 如果检测有警告信息，显示提示
-        if (metadata?.error) {
-          showToast(metadata.error, "warning");
-        }
-      } catch {
-        // 检测失败但继续添加
-        showToast("无法自动检测文件信息，请手动填写", "warning");
-      } finally {
-        setIsDetectingCid(false);
       }
 
-      // 如果用户没有输入文件名，使用默认名称
+      // 如果用户没有输入文件名，使用检测到的名称或默认名称
       if (!name) {
-        name = `file-${newCid.slice(0, 8)}`;
+        name = metadata?.name || `file-${newCid.slice(0, 8)}`;
+      }
+
+      // 如果用户没有输入大小，使用检测到的大小
+      if (!userInputSize && metadata?.size) {
+        size = metadata.size;
       }
 
       const fileRecord: FileRecord = {
@@ -631,17 +668,20 @@ export function useDashboard() {
       await api.saveFile(fileRecord);
       const updatedFiles = [fileRecord, ...files];
       setFiles(updatedFiles);
+      
+      // 重置状态
       setAddCidModalOpen(false);
       setNewCid("");
       setNewCidName("");
       setNewCidSize("");
+      setDetectedCidInfo(null);
       showToast("文件已添加", "success");
     } catch {
       showToast("添加文件失败", "error");
     } finally {
       setIsAddingCid(false);
     }
-  }, [currentFolderId, newCid, newCidName, newCidSize, files, showToast]);
+  }, [currentFolderId, newCid, newCidName, newCidSize, files, showToast, detectedCidInfo]);
 
   // Handle toggle selection
   const handleToggleSelection = useCallback(
@@ -743,7 +783,7 @@ export function useDashboard() {
     moveModalOpen, setMoveModalOpen, selectedFileToMove, setSelectedFileToMove,
     addCidModalOpen, setAddCidModalOpen,
     newCid, newCidName, newCidSize,
-    isAddingCid, isDetectingCid,
+    isAddingCid, isDetectingCid, detectedCidInfo,
     settingsModalOpen, setSettingsModalOpen,
     darkMode, itemsPerPage, autoRefresh,
     downloadModalOpen, setDownloadModalOpen, selectedFileForDownload, setSelectedFileForDownload,
@@ -781,6 +821,7 @@ export function useDashboard() {
     handleDeleteFolder,
     handleMoveFile,
     handleAddCid,
+    handleDetectCid,
     handleToggleSelection,
     handleSelectAll,
     handleClearSelection,

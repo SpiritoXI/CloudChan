@@ -73,6 +73,7 @@ export default function DashboardPage() {
     newCidSize,
     isAddingCid,
     isDetectingCid,
+    detectedCidInfo,
     settingsModalOpen,
     setSettingsModalOpen,
     darkMode,
@@ -118,6 +119,7 @@ export default function DashboardPage() {
     handleDeleteFolder,
     handleMoveFile,
     handleAddCid,
+    handleDetectCid,
     handleToggleSelection,
     handleSelectAll,
     handleClearSelection,
@@ -301,16 +303,23 @@ export default function DashboardPage() {
 
       <AddCidModal
         isOpen={addCidModalOpen}
-        onClose={() => setAddCidModalOpen(false)}
+        onClose={() => {
+          setAddCidModalOpen(false);
+          setNewCid("");
+          setNewCidName("");
+          setNewCidSize("");
+        }}
         cid={newCid}
         name={newCidName}
         size={newCidSize}
         isAdding={isAddingCid}
         isDetecting={isDetectingCid}
+        detectedInfo={detectedCidInfo}
         onCidChange={setNewCid}
         onNameChange={setNewCidName}
         onSizeChange={setNewCidSize}
         onSubmit={handleAddCid}
+        onDetectCid={handleDetectCid}
       />
 
       <SettingsModal
