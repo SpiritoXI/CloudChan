@@ -1,15 +1,14 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { Download, ExternalLink, Copy, Check, ArrowLeft, File, Clock, Globe, Zap, RefreshCw } from "lucide-react";
+import { Download, ExternalLink, Copy, Check, ArrowLeft, File, Globe, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
 import { formatFileSize, copyToClipboard } from "@/lib/utils";
-import { gatewayApi, shareApi } from "@/lib/api";
-import { CONFIG, GATEWAY_DOWNLOAD_TEST } from "@/lib/config";
+import { api, gatewayApi, shareApi } from "@/lib/api";
+import { CONFIG } from "@/lib/config";
 import type { Gateway } from "@/types";
 
 interface ShareInfo {
@@ -23,7 +22,6 @@ interface GatewayLink {
   url: string;
   status: "pending" | "testing" | "success" | "failed";
   latency?: number;
-  downloadSpeed?: number;
 }
 
 declare global {
@@ -37,16 +35,16 @@ declare global {
 export default function DownloadPageClient() {
   const params = useParams();
   const searchParams = useSearchParams();
-  
+
   // 优先从全局变量获取 CID（Cloudflare Function 注入），否则从 URL 参数获取
   const urlCid = params.cid as string;
   const globalCid = typeof window !== 'undefined' ? window.__DOWNLOAD_CID__ : undefined;
   const cid = (globalCid && globalCid !== '[[cid]]' ? globalCid : urlCid) || '';
-  
+
   // 优先从全局变量获取文件名和大小
   const globalFilename = typeof window !== 'undefined' ? window.__DOWNLOAD_FILENAME__ : undefined;
   const globalSize = typeof window !== 'undefined' ? window.__DOWNLOAD_SIZE__ : undefined;
-  
+
   const filename = globalFilename || searchParams.get("filename") || "";
   const sizeParam = globalSize || searchParams.get("size");
   const size = sizeParam ? parseInt(sizeParam, 10) : undefined;
@@ -55,9 +53,7 @@ export default function DownloadPageClient() {
   const [gatewayLinks, setGatewayLinks] = useState<GatewayLink[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
-  const [isSmartTesting, setIsSmartTesting] = useState(false);
-  const [testProgress, setTestProgress] = useState(0);
-  const [bestGateway, setBestGateway] = useState<GatewayLink | null>(null);
+  const [isTesting, setIsTesting] = useState(false);
 
   // 加载分享信息和网关
   useEffect(() => {
@@ -66,18 +62,38 @@ export default function DownloadPageClient() {
     const loadData = async () => {
       setIsLoading(true);
 
+      let fileInfo: ShareInfo = { cid, filename, size };
+
       // 尝试从API获取分享信息
       try {
         const info = await shareApi.getShareInfo(cid);
         if (info) {
-          setShareInfo({
+          fileInfo = {
             cid: info.cid,
             filename: info.filename,
             size: info.size,
-          });
+          };
+          setShareInfo(fileInfo);
         }
       } catch {
         console.warn("获取分享信息失败，使用URL参数");
+      }
+
+      // 如果API没有返回文件名或大小，尝试从IPFS网关获取
+      if (!fileInfo.filename || !fileInfo.size) {
+        try {
+          const cidInfo = await api.fetchCidInfo(cid);
+          if (cidInfo && cidInfo.valid) {
+            fileInfo = {
+              ...fileInfo,
+              filename: fileInfo.filename || cidInfo.name,
+              size: fileInfo.size || cidInfo.size,
+            };
+            setShareInfo(fileInfo);
+          }
+        } catch {
+          console.warn("从IPFS网关获取文件信息失败");
+        }
       }
 
       // 获取网关列表
@@ -110,16 +126,34 @@ export default function DownloadPageClient() {
     loadData();
   }, [cid]);
 
-  // 测试单个网关
-  const testSingleGateway = async (link: GatewayLink, index: number): Promise<void> => {
+  // 测试单个网关 - 带超时保护
+  const testSingleGateway = async (link: GatewayLink, index: number, abortSignal: AbortSignal): Promise<void> => {
+    // 如果已取消，直接返回
+    if (abortSignal.aborted) {
+      setGatewayLinks((prev) =>
+        prev.map((l, i) => (i === index ? { ...l, status: "failed" } : l))
+      );
+      return;
+    }
+
     setGatewayLinks((prev) =>
       prev.map((l, i) => (i === index ? { ...l, status: "testing" } : l))
     );
 
     const startTime = Date.now();
     try {
-      const result = await gatewayApi.testGateway(link.gateway);
+      const result = await gatewayApi.testGateway(link.gateway, {
+        signal: abortSignal,
+      });
       const latency = Date.now() - startTime;
+
+      // 再次检查是否已取消
+      if (abortSignal.aborted) {
+        setGatewayLinks((prev) =>
+          prev.map((l, i) => (i === index ? { ...l, status: "failed" } : l))
+        );
+        return;
+      }
 
       setGatewayLinks((prev) =>
         prev.map((l, i) =>
@@ -139,118 +173,26 @@ export default function DownloadPageClient() {
     }
   };
 
-  // 测试所有网关（原始方式）
+  // 测试所有网关 - 使用 AbortController 确保可以取消
   const testGateways = async (links: GatewayLink[]) => {
-    const testPromises = links.map((link, index) => testSingleGateway(link, index));
-    await Promise.all(testPromises);
-  };
-
-  // 智能检测 - 使用下载连通性测试，更准确
-  const smartTestGateways = useCallback(async () => {
-    if (gatewayLinks.length === 0) return;
-
-    setIsSmartTesting(true);
-    setTestProgress(0);
-    setBestGateway(null);
-
-    const total = gatewayLinks.length;
-    let completed = 0;
-    let currentBest: GatewayLink | null = null;
-    let availableCount = 0;
-    const MIN_AVAILABLE_GATEWAYS = 3; // 找到3个可用网关后提前结束
-
-    // 使用新的下载连通性测试
+    setIsTesting(true);
     const abortController = new AbortController();
 
+    // 设置总体超时 - 15秒后自动取消
+    const timeoutId = setTimeout(() => {
+      abortController.abort();
+    }, 15000);
+
     try {
-      const results = await gatewayApi.smartDownloadTest(
-        gatewayLinks.map((l) => l.gateway),
-        {
-          signal: abortController.signal,
-          maxConcurrency: GATEWAY_DOWNLOAD_TEST.MAX_CONCURRENCY,
-          onProgress: (gateway, result) => {
-            // 找到对应的 link 索引
-            const index = gatewayLinks.findIndex((l) => l.gateway.url === gateway.url);
-            if (index === -1) return;
-
-            const link = gatewayLinks[index];
-            const updatedLink: GatewayLink = {
-              ...link,
-              status: result.available ? "success" : "failed",
-              latency: result.latency,
-              downloadSpeed: result.downloadSpeed,
-            };
-
-            setGatewayLinks((prev) =>
-              prev.map((l, i) => (i === index ? updatedLink : l))
-            );
-
-            // 更新最快网关（按下载速度）
-            if (result.available) {
-              availableCount++;
-              if (
-                !currentBest ||
-                (result.downloadSpeed >
-                  (currentBest as GatewayLink & { downloadSpeed?: number }).downloadSpeed!)
-              ) {
-                currentBest = { ...updatedLink, downloadSpeed: result.downloadSpeed };
-                setBestGateway(updatedLink);
-              }
-
-              // 找到足够数量的可用网关后提前终止
-              if (availableCount >= MIN_AVAILABLE_GATEWAYS) {
-                abortController.abort();
-              }
-            }
-
-            completed++;
-            setTestProgress(Math.round((completed / total) * 100));
-          },
-        }
+      const testPromises = links.map((link, index) =>
+        testSingleGateway(link, index, abortController.signal)
       );
-
-      // 更新所有网关状态
-      setGatewayLinks((prev) =>
-        prev.map((link) => {
-          const result = results.find((r) => r.gateway.url === link.gateway.url);
-          if (result) {
-            return {
-              ...link,
-              status: result.available ? "success" : "failed",
-              latency: result.latency,
-              downloadSpeed: result.downloadSpeed,
-            };
-          }
-          return link;
-        })
-      );
-
-      // 设置最佳网关（按下载速度排序后的第一个）
-      const bestResult = results.find((r) => r.available);
-      if (bestResult) {
-        const bestLink = gatewayLinks.find(
-          (l) => l.gateway.url === bestResult.gateway.url
-        );
-        if (bestLink) {
-          setBestGateway({
-            ...bestLink,
-            status: "success",
-            latency: bestResult.latency,
-          });
-        }
-      }
-    } catch (error) {
-      // 如果是主动取消，不报错
-      if (error instanceof Error && error.name === 'AbortError') {
-        console.log('[智能检测] 已找到足够可用网关，提前结束检测');
-      } else {
-        console.error("智能检测失败:", error);
-      }
+      await Promise.all(testPromises);
     } finally {
-      setIsSmartTesting(false);
-      setTestProgress(100);
+      clearTimeout(timeoutId);
+      setIsTesting(false);
     }
-  }, [gatewayLinks]);
+  };
 
   // 复制链接
   const handleCopyUrl = async (url: string) => {
@@ -269,41 +211,13 @@ export default function DownloadPageClient() {
       latency: undefined,
     }));
     setGatewayLinks(resetLinks);
-    setBestGateway(null);
     testGateways(resetLinks);
   };
 
-  // 智能检测
-  const handleSmartTest = () => {
-    const resetLinks = gatewayLinks.map((link) => ({
-      ...link,
-      status: "pending" as const,
-      latency: undefined,
-    }));
-    setGatewayLinks(resetLinks);
-    setBestGateway(null);
-    // 使用 setTimeout 确保状态更新后再开始测试
-    setTimeout(() => smartTestGateways(), 0);
-  };
-
-  // 按可用性、下载速度、延迟排序
+  // 按可用性和延迟排序
   const sortedLinks = [...gatewayLinks].sort((a, b) => {
-    // 1. 可用性优先
     if (a.status === "success" && b.status !== "success") return -1;
     if (a.status !== "success" && b.status === "success") return 1;
-
-    // 2. 下载速度次之（速度高的排前面）
-    if (a.downloadSpeed && b.downloadSpeed) {
-      if (b.downloadSpeed !== a.downloadSpeed) {
-        return b.downloadSpeed - a.downloadSpeed;
-      }
-    } else if (a.downloadSpeed) {
-      return -1;
-    } else if (b.downloadSpeed) {
-      return 1;
-    }
-
-    // 3. 延迟最后（延迟低的排前面）
     if (a.latency && b.latency) return a.latency - b.latency;
     if (a.latency) return -1;
     if (b.latency) return 1;
@@ -384,219 +298,105 @@ export default function DownloadPageClient() {
             </CardContent>
           </Card>
 
-          {/* 推荐网关卡片 - 智能检测结果显示 */}
-          {bestGateway && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-2xl shadow-lg border-2 border-green-200 dark:border-green-800 p-6"
-            >
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center space-x-2">
-                  <Zap className="h-6 w-6 text-yellow-500" />
-                  <h3 className="text-lg font-bold text-slate-900 dark:text-white">
-                    智能推荐 - 最快网关
-                  </h3>
-                </div>
-                <span className="px-3 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-sm font-medium rounded-full">
-                  {bestGateway.latency}ms
+          {/* 网关列表 */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="flex items-center space-x-2">
+                <Globe className="h-5 w-5 text-blue-500" />
+                <span>下载网关</span>
+              </CardTitle>
+              <div className="flex items-center space-x-2">
+                <span className="text-sm text-muted-foreground">
+                  {availableCount}/{gatewayLinks.length} 可用
                 </span>
-              </div>
-              
-              <div className="flex items-center space-x-3 mb-4">
-                <span className="text-3xl">{bestGateway.gateway.icon}</span>
-                <div>
-                  <p className="font-semibold text-slate-900 dark:text-white">
-                    {bestGateway.gateway.name}
-                  </p>
-                  <p className="text-sm text-slate-500 dark:text-slate-400">
-                    {bestGateway.gateway.region} · 延迟最低
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex space-x-2">
                 <Button
                   variant="outline"
-                  className="flex-1"
-                  onClick={() => handleCopyUrl(bestGateway.url)}
+                  size="sm"
+                  onClick={handleRefresh}
+                  disabled={isTesting}
                 >
-                  {copiedUrl === bestGateway.url ? (
-                    <Check className="h-4 w-4 mr-2 text-green-500" />
-                  ) : (
-                    <Copy className="h-4 w-4 mr-2" />
-                  )}
-                  复制链接
-                </Button>
-                <Button
-                  className="flex-1 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700"
-                  onClick={() => window.open(bestGateway.url, "_blank")}
-                >
-                  <Download className="h-4 w-4 mr-2" />
-                  立即下载
+                  <RefreshCw className={`h-4 w-4 mr-1 ${isTesting ? 'animate-spin' : ''}`} />
+                  {isTesting ? '检测中...' : '刷新'}
                 </Button>
               </div>
-            </motion.div>
-          )}
-
-          {/* 下载链接卡片 */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <CardTitle className="flex items-center space-x-2">
-                  <Globe className="h-5 w-5 text-green-500" />
-                  <span>下载链接</span>
-                </CardTitle>
-                <div className="flex items-center space-x-2">
-                  <span className="text-sm text-muted-foreground">
-                    {availableCount}/{gatewayLinks.length} 可用
-                  </span>
-                  <Button 
-                    variant="default" 
-                    size="sm" 
-                    onClick={handleSmartTest}
-                    disabled={isSmartTesting || gatewayLinks.length === 0}
-                    className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
-                  >
-                    {isSmartTesting ? (
-                      <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
-                    ) : (
-                      <Zap className="h-4 w-4 mr-1" />
-                    )}
-                    智能检测
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={handleRefresh}>
-                    <Clock className="h-4 w-4 mr-1" />
-                    刷新
-                  </Button>
-                </div>
-              </div>
-              
-              {/* 智能检测进度条 */}
-              {isSmartTesting && (
-                <div className="mt-4 space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-slate-600 dark:text-slate-400">正在智能检测所有网关...</span>
-                    <span className="text-slate-900 dark:text-white font-medium">{testProgress}%</span>
-                  </div>
-                  <Progress value={testProgress} className="h-2" />
-                  {bestGateway && (
-                    <p className="text-xs text-green-600 dark:text-green-400">
-                      当前最快: {bestGateway.gateway.name} ({bestGateway.latency}ms)
-                    </p>
-                  )}
-                </div>
-              )}
             </CardHeader>
             <CardContent>
-              {isLoading ? (
-                <div className="text-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                  <p className="text-slate-600 dark:text-slate-400">正在检测网关...</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {sortedLinks.map((link, index) => (
-                    <motion.div
-                      key={link.gateway.name}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: index * 0.05 }}
-                      className={`p-4 rounded-lg border ${
-                        link.status === "success"
-                          ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800"
-                          : link.status === "failed"
-                          ? "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 opacity-60"
-                          : link.status === "testing"
-                          ? "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800"
-                          : "bg-slate-50 dark:bg-slate-700/50 border-slate-200 dark:border-slate-700"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between flex-wrap gap-2">
-                        <div className="flex items-center space-x-3">
-                          <span className="text-2xl">{link.gateway.icon}</span>
-                          <div>
-                            <p className="font-medium text-sm">
-                              {link.gateway.name}
-                              {index === 0 && link.status === "success" && (
-                                <span className="ml-2 px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-xs rounded-full">
-                                  推荐
-                                </span>
-                              )}
-                            </p>
-                            <div className="flex items-center space-x-2 text-xs text-muted-foreground">
-                              <span>{link.gateway.region}</span>
-                              {link.latency && (
-                                <span className="flex items-center">
-                                  <Clock className="h-3 w-3 mr-0.5" />
-                                  {link.latency}ms
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center space-x-2">
-                          {link.status === "testing" && (
-                            <span className="text-xs text-blue-600 dark:text-blue-400 flex items-center">
-                              <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600 mr-1"></div>
-                              检测中...
-                            </span>
-                          )}
-                          {link.status === "success" && (
-                            <span className="text-xs text-green-600 dark:text-green-400">
-                              可用
-                            </span>
-                          )}
-                          {link.status === "failed" && (
-                            <span className="text-xs text-red-600 dark:text-red-400">
-                              不可用
-                            </span>
-                          )}
-
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleCopyUrl(link.url)}
-                            disabled={link.status !== "success"}
-                          >
-                            {copiedUrl === link.url ? (
-                              <Check className="h-4 w-4 text-green-500" />
-                            ) : (
-                              <Copy className="h-4 w-4" />
-                            )}
-                          </Button>
-
-                          <Button
-                            size="sm"
-                            onClick={() => window.open(link.url, "_blank")}
-                            disabled={link.status !== "success"}
-                          >
-                            <ExternalLink className="h-4 w-4 mr-1" />
-                            下载
-                          </Button>
-                        </div>
+              <div className="space-y-2">
+                {sortedLinks.map((link, index) => (
+                  <motion.div
+                    key={link.gateway.url}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: index * 0.05 }}
+                    className={`flex items-center justify-between p-3 rounded-lg border ${
+                      link.status === "success"
+                        ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800"
+                        : link.status === "failed"
+                        ? "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 opacity-60"
+                        : link.status === "testing"
+                        ? "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800"
+                        : "bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
+                    }`}
+                  >
+                    <div className="flex items-center space-x-3 flex-1 min-w-0">
+                      <span className="text-xl">{link.gateway.icon}</span>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium truncate">{link.gateway.name}</p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {link.gateway.region === "CN" ? "国内" : "国际"}
+                          {link.latency && link.status === "success" && ` · ${link.latency}ms`}
+                        </p>
                       </div>
-
-                      {/* 链接显示 */}
-                      {link.status === "success" && (
-                        <div className="mt-3 pt-3 border-t border-green-200 dark:border-green-800">
-                          <code className="text-xs text-green-700 dark:text-green-300 break-all">
-                            {link.url}
-                          </code>
-                        </div>
+                    </div>
+                    <div className="flex items-center space-x-2 ml-2">
+                      {link.status === "testing" && (
+                        <span className="text-xs text-blue-600 dark:text-blue-400">
+                          检测中...
+                        </span>
                       )}
-                    </motion.div>
-                  ))}
-                </div>
-              )}
+                      {link.status === "success" && (
+                        <span className="text-xs text-green-600 dark:text-green-400">
+                          可用
+                        </span>
+                      )}
+                      {link.status === "failed" && (
+                        <span className="text-xs text-red-600 dark:text-red-400">
+                          不可用
+                        </span>
+                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleCopyUrl(link.url)}
+                        disabled={link.status !== "success"}
+                      >
+                        {copiedUrl === link.url ? (
+                          <Check className="h-4 w-4 text-green-500" />
+                        ) : (
+                          <Copy className="h-4 w-4" />
+                        )}
+                      </Button>
+                      <Button
+                        variant={link.status === "success" ? "default" : "outline"}
+                        size="sm"
+                        asChild
+                        disabled={link.status !== "success"}
+                      >
+                        <a
+                          href={link.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <ExternalLink className="h-4 w-4 mr-1" />
+                          下载
+                        </a>
+                      </Button>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
             </CardContent>
           </Card>
-
-          {/* 提示信息 */}
-          <div className="text-center text-sm text-muted-foreground">
-            <p>如果某个网关无法下载，请尝试其他网关链接</p>
-          </div>
         </motion.div>
       </main>
     </div>
