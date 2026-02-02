@@ -234,7 +234,7 @@ export function useDashboard() {
         setUploadProgress(0);
       }
     },
-    [currentFolderId, showToast]
+    [currentFolderId, showToast, setFiles]
   );
 
   // Handle file delete
@@ -676,8 +676,7 @@ export function useDashboard() {
       };
 
       await api.saveFile(fileRecord);
-      const updatedFiles = [fileRecord, ...files];
-      setFiles(updatedFiles);
+      setFiles((prev) => [fileRecord, ...prev]);
       
       // 重置状态
       setAddCidModalOpen(false);
@@ -691,7 +690,7 @@ export function useDashboard() {
     } finally {
       setIsAddingCid(false);
     }
-  }, [currentFolderId, newCid, newCidName, newCidSize, files, showToast, detectedCidInfo]);
+  }, [currentFolderId, newCid, newCidName, newCidSize, setFiles, showToast, detectedCidInfo]);
 
   // Handle toggle selection
   const handleToggleSelection = useCallback(
