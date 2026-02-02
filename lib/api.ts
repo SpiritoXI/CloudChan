@@ -891,6 +891,7 @@ export const gatewayApi = {
       samples?: number;
       testCid?: string;
       signal?: AbortSignal;
+      timeout?: number;
     } = {}
   ): Promise<{
     available: boolean;
@@ -899,7 +900,7 @@ export const gatewayApi = {
     corsEnabled: boolean;
     rangeSupport: boolean;
   }> {
-    const { retries = 2, samples = 3, testCid: customTestCid, signal } = options;
+    const { retries = 2, samples = 3, testCid: customTestCid, signal, timeout = CONFIG.GATEWAY_TEST.TIMEOUT } = options;
     // 如果没有提供自定义 testCid，动态获取一个可用的
     const testCid = customTestCid || await this.getTestCid();
     const testUrl = `${gateway.url}${testCid}`;
@@ -934,7 +935,7 @@ export const gatewayApi = {
           const controller = new AbortController();
           const timeoutId = setTimeout(
             () => controller.abort(),
-            CONFIG.GATEWAY_TEST.TIMEOUT
+            timeout
           );
 
           // 如果外部 signal 被取消，也取消内部请求

@@ -36,33 +36,49 @@ export default function DownloadPageClient() {
   const params = useParams();
   const searchParams = useSearchParams();
 
-  // 优先从全局变量获取 CID（Cloudflare Function 注入），否则从 URL 参数获取
+  // 从 URL 参数获取基础值（服务端和客户端一致）
   const urlCid = params.cid as string;
-  const globalCid = typeof window !== 'undefined' ? window.__DOWNLOAD_CID__ : undefined;
-  const cid = (globalCid && globalCid !== '[[cid]]' ? globalCid : urlCid) || '';
+  const urlFilename = searchParams.get("filename") || "";
+  const urlSizeParam = searchParams.get("size");
+  const urlSize = urlSizeParam ? parseInt(urlSizeParam, 10) : undefined;
 
-  // 优先从全局变量获取文件名和大小
-  const globalFilename = typeof window !== 'undefined' ? window.__DOWNLOAD_FILENAME__ : undefined;
-  const globalSize = typeof window !== 'undefined' ? window.__DOWNLOAD_SIZE__ : undefined;
+  // 使用 useState 存储客户端获取的值
+  const [cid, setCid] = useState(urlCid || '');
+  const [initialFilename] = useState(urlFilename);
+  const [initialSize] = useState(urlSize);
 
-  const filename = globalFilename || searchParams.get("filename") || "";
-  const sizeParam = globalSize || searchParams.get("size");
-  const size = sizeParam ? parseInt(sizeParam, 10) : undefined;
-
-  const [shareInfo, setShareInfo] = useState<ShareInfo>({ cid, filename, size });
+  const [shareInfo, setShareInfo] = useState<ShareInfo>({ cid: urlCid || '', filename: urlFilename, size: urlSize });
   const [gatewayLinks, setGatewayLinks] = useState<GatewayLink[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
   const [isTesting, setIsTesting] = useState(false);
+  const [isClient, setIsClient] = useState(false);
+
+  // 客户端挂载后检查全局变量
+  useEffect(() => {
+    setIsClient(true);
+
+    // 优先从全局变量获取 CID（Cloudflare Function 注入）
+    const globalCid = window.__DOWNLOAD_CID__;
+    const globalFilename = window.__DOWNLOAD_FILENAME__;
+    const globalSize = window.__DOWNLOAD_SIZE__;
+
+    const finalCid = (globalCid && globalCid !== '[[cid]]' ? globalCid : urlCid) || '';
+    const finalFilename = globalFilename || initialFilename;
+    const finalSize = globalSize ? parseInt(globalSize, 10) : initialSize;
+
+    setCid(finalCid);
+    setShareInfo({ cid: finalCid, filename: finalFilename, size: finalSize });
+  }, []);
 
   // 加载分享信息和网关
   useEffect(() => {
-    if (!cid) return;
+    if (!cid || !isClient) return;
 
     const loadData = async () => {
       setIsLoading(true);
 
-      let fileInfo: ShareInfo = { cid, filename, size };
+      let fileInfo: ShareInfo = { ...shareInfo };
 
       // 尝试从API获取分享信息
       try {
@@ -97,38 +113,56 @@ export default function DownloadPageClient() {
       // 更新文件信息状态
       setShareInfo(fileInfo);
 
-      // 获取网关列表
-      const allGateways = [...CONFIG.DEFAULT_GATEWAYS];
-      try {
-        const publicGateways = await gatewayApi.fetchPublicGateways();
-        publicGateways.forEach((publicGateway) => {
-          if (!allGateways.find((g) => g.url === publicGateway.url)) {
-            allGateways.push(publicGateway);
-          }
-        });
-      } catch {
-        console.warn("获取公共网关列表失败，使用默认网关");
-      }
-
-      // 初始化网关链接状态
-      const links = allGateways.map((gateway) => ({
+      // 立即显示默认网关列表（不阻塞UI）
+      const defaultGateways = [...CONFIG.DEFAULT_GATEWAYS];
+      const links = defaultGateways.map((gateway) => ({
         gateway,
         url: `${gateway.url}${cid}`,
         status: "pending" as const,
       }));
       setGatewayLinks(links);
-
-      // 网关列表已加载完成，关闭加载状态
       setIsLoading(false);
 
-      // 在后台测试网关可用性（不阻塞UI）
-      testGateways(links);
+      // 在后台获取公共网关并测试
+      const loadAndTestGateways = async () => {
+        const allGateways = [...defaultGateways];
+
+        // 后台获取公共网关（不阻塞显示）
+        try {
+          const publicGateways = await gatewayApi.fetchPublicGateways();
+          publicGateways.forEach((publicGateway) => {
+            if (!allGateways.find((g) => g.url === publicGateway.url)) {
+              allGateways.push(publicGateway);
+            }
+          });
+
+          // 如果有新网关，更新列表
+          if (allGateways.length > defaultGateways.length) {
+            const newLinks = allGateways.map((gateway) => ({
+              gateway,
+              url: `${gateway.url}${cid}`,
+              status: "pending" as const,
+            }));
+            setGatewayLinks(newLinks);
+            // 测试所有网关（包括新获取的）
+            testGateways(newLinks);
+            return;
+          }
+        } catch {
+          console.warn("获取公共网关列表失败，使用默认网关");
+        }
+
+        // 测试默认网关
+        testGateways(links);
+      };
+
+      loadAndTestGateways();
     };
 
     loadData();
-  }, [cid]);
+  }, [cid, isClient]);
 
-  // 测试单个网关 - 带超时保护
+  // 测试单个网关 - 带超时保护（快速模式）
   const testSingleGateway = async (link: GatewayLink, index: number, abortSignal: AbortSignal): Promise<void> => {
     // 如果已取消，直接返回
     if (abortSignal.aborted) {
@@ -144,8 +178,12 @@ export default function DownloadPageClient() {
 
     const startTime = Date.now();
     try {
+      // 使用快速测试模式：1次采样，1次重试，5秒超时
       const result = await gatewayApi.testGateway(link.gateway, {
         signal: abortSignal,
+        samples: 1,
+        retries: 1,
+        timeout: 5000, // 5秒超时
       });
       const latency = Date.now() - startTime;
 
@@ -175,21 +213,35 @@ export default function DownloadPageClient() {
     }
   };
 
-  // 测试所有网关 - 使用 AbortController 确保可以取消
+  // 测试所有网关 - 使用 AbortController 确保可以取消（带并发限制）
   const testGateways = async (links: GatewayLink[]) => {
     setIsTesting(true);
     const abortController = new AbortController();
 
-    // 设置总体超时 - 15秒后自动取消
+    // 设置总体超时 - 30秒后自动取消
     const timeoutId = setTimeout(() => {
       abortController.abort();
-    }, 15000);
+    }, 30000);
 
     try {
-      const testPromises = links.map((link, index) =>
-        testSingleGateway(link, index, abortController.signal)
-      );
-      await Promise.all(testPromises);
+      // 限制并发数为5，避免同时发起过多请求
+      const concurrencyLimit = 5;
+      const executing: Promise<void>[] = [];
+
+      for (let i = 0; i < links.length; i++) {
+        const promise = testSingleGateway(links[i], i, abortController.signal);
+        executing.push(promise);
+
+        if (executing.length >= concurrencyLimit) {
+          await Promise.race(executing);
+          executing.splice(
+            executing.findIndex((p) => p === promise),
+            1
+          );
+        }
+      }
+
+      await Promise.all(executing);
     } finally {
       clearTimeout(timeoutId);
       setIsTesting(false);
