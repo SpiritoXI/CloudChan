@@ -126,9 +126,13 @@ export function useUpload(options: UseUploadOptions): UploadState & UploadOperat
             setFiles((prev) => [fileRecord, ...prev]);
             showToast(`文件 ${safeName} 上传成功`, "success");
 
+            // 保存文件ID和CID用于后续操作
+            const uploadedFileId = fileRecord.id;
+            const uploadedFileCid = result.cid;
+
             // 后台静默传播文件到其他网关，不阻塞主流程
             if (gateways.length > 0) {
-              propagationApi.backgroundPropagate(result.cid, gateways, {
+              propagationApi.backgroundPropagate(uploadedFileCid, gateways, {
                 maxGateways: 8,
                 timeout: 15000,
                 onComplete: (propResult) => {
@@ -140,20 +144,20 @@ export function useUpload(options: UseUploadOptions): UploadState & UploadOperat
             }
 
             // 后台快速验证文件完整性
-            uploadApi.verifyFile(result.cid).then((verifyResult) => {
+            uploadApi.verifyFile(uploadedFileCid).then((verifyResult) => {
               const updates = {
                 verified: verifyResult.verified,
                 verify_status: verifyResult.status,
                 verify_message: verifyResult.message,
               };
 
-              // 更新本地状态
+              // 更新本地状态 - 使用函数式更新确保使用最新状态
               setFiles((prev) =>
-                prev.map((f) => (f.id === fileRecord.id ? { ...f, ...updates } : f))
+                prev.map((f) => (f.id === uploadedFileId ? { ...f, ...updates } : f))
               );
 
               // 更新验证结果到服务器（使用 updateFile 而不是 saveFile 避免重复）
-              api.updateFile(fileRecord.id, updates).catch((err) => {
+              api.updateFile(uploadedFileId, updates).catch((err) => {
                 console.error("保存验证结果失败:", err);
               });
 

@@ -74,15 +74,17 @@ export function useDashboard() {
   const [previewFile, setPreviewFile] = useState<FileRecord | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
 
-  // 使用 ref 来防止重复加载
+  // 使用 ref 来防止重复加载（在严格模式下使用初始化标记）
   const dataLoadedRef = useRef(false);
+  const isLoadingRef = useRef(false);
 
   // Load data and settings from localStorage and server
   useEffect(() => {
-    // 如果数据已经加载过，不再重复加载
-    if (dataLoadedRef.current) return;
+    // 如果数据已经加载过或正在加载中，不再重复加载
+    if (dataLoadedRef.current || isLoadingRef.current) return;
 
     const loadData = async () => {
+      isLoadingRef.current = true;
       setIsLoading(true);
       try {
         // 从 localStorage 加载设置
@@ -122,6 +124,7 @@ export function useDashboard() {
         console.error("Failed to load data:", error);
       } finally {
         setIsLoading(false);
+        isLoadingRef.current = false;
       }
     };
 
@@ -196,21 +199,25 @@ export function useDashboard() {
             setFiles((prev) => [fileRecord, ...prev]);
             showToast(`文件 ${safeName} 上传成功`, "success");
 
+            // 保存文件ID用于后续验证更新
+            const uploadedFileId = fileRecord.id;
+            const uploadedFileCid = result.cid;
+
             // 后台快速验证文件完整性
-            uploadApi.verifyFile(result.cid).then((verifyResult) => {
+            uploadApi.verifyFile(uploadedFileCid).then((verifyResult) => {
               const updates = {
                 verified: verifyResult.verified,
                 verify_status: verifyResult.status,
                 verify_message: verifyResult.message,
               };
 
-              // 更新本地状态
+              // 更新本地状态 - 使用函数式更新确保使用最新状态
               setFiles((prev) =>
-                prev.map((f) => (f.id === fileRecord.id ? { ...f, ...updates } : f))
+                prev.map((f) => (f.id === uploadedFileId ? { ...f, ...updates } : f))
               );
 
               // 更新验证结果到服务器（使用 updateFile 而不是 saveFile 避免重复）
-              api.updateFile(fileRecord.id, updates).catch((err) => {
+              api.updateFile(uploadedFileId, updates).catch((err) => {
                 console.error("保存验证结果失败:", err);
               });
 
