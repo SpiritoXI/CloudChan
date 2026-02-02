@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { Download, ExternalLink, Copy, Check, ArrowLeft, File, Globe, RefreshCw } from "lucide-react";
+import { Download, ExternalLink, Copy, Check, ArrowLeft, File, Globe, RefreshCw, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatFileSize, copyToClipboard } from "@/lib/utils";
@@ -322,7 +322,17 @@ export default function DownloadPageClient() {
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                {sortedLinks.map((link, index) => (
+                {isLoading ? (
+                  <div className="flex items-center justify-center py-8 text-muted-foreground">
+                    <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                    正在加载网关列表...
+                  </div>
+                ) : sortedLinks.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    暂无可用网关，请点击刷新按钮重试
+                  </div>
+                ) : (
+                  sortedLinks.map((link, index) => (
                   <motion.div
                     key={link.gateway.url}
                     initial={{ opacity: 0, x: -20 }}
@@ -393,7 +403,8 @@ export default function DownloadPageClient() {
                       </Button>
                     </div>
                   </motion.div>
-                ))}
+                ))
+                )}
               </div>
             </CardContent>
           </Card>
