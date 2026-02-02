@@ -78,7 +78,8 @@ export default function DownloadPageClient() {
     const loadData = async () => {
       setIsLoading(true);
 
-      let fileInfo: ShareInfo = { ...shareInfo };
+      // 使用当前cid初始化fileInfo
+      let fileInfo: ShareInfo = { cid, filename: shareInfo.filename, size: shareInfo.size };
 
       // 尝试从API获取分享信息
       try {
@@ -226,22 +227,24 @@ export default function DownloadPageClient() {
     try {
       // 限制并发数为5，避免同时发起过多请求
       const concurrencyLimit = 5;
-      const executing: Promise<void>[] = [];
+      const executing: Map<number, Promise<void>> = new Map();
 
       for (let i = 0; i < links.length; i++) {
-        const promise = testSingleGateway(links[i], i, abortController.signal);
-        executing.push(promise);
+        const index = i;
+        const promise = testSingleGateway(links[index], index, abortController.signal).finally(() => {
+          executing.delete(index);
+        });
+        executing.set(index, promise);
 
-        if (executing.length >= concurrencyLimit) {
-          await Promise.race(executing);
-          executing.splice(
-            executing.findIndex((p) => p === promise),
-            1
-          );
+        if (executing.size >= concurrencyLimit) {
+          await Promise.race(executing.values());
         }
       }
 
-      await Promise.all(executing);
+      // 等待所有剩余任务完成
+      if (executing.size > 0) {
+        await Promise.all(executing.values());
+      }
     } finally {
       clearTimeout(timeoutId);
       setIsTesting(false);
