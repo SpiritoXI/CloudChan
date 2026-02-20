@@ -9,7 +9,7 @@ import type { Gateway } from '@/types';
  * 应用信息
  */
 export const APP = {
-  VERSION: '3.3.4',
+  VERSION: '3.3.5',
   BUILD_TIME: new Date().toISOString(),
   NAME: 'CrustShare',
   DESCRIPTION: '去中心化文件存储与分享平台',
@@ -23,6 +23,7 @@ export const API = {
   GET_TOKEN: '/api/get_token',
   SHARE: '/api/share',
   VERIFY_SHARE_PASSWORD: '/api/verify-share-password',
+  CREATE_ORDER: '/api/create_order',
 } as const;
 
 /**

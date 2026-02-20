@@ -29,7 +29,10 @@ const CRUST_UPLOAD_ENDPOINTS = [
 ];
 
 // 上传版本号 - 用于确认代码是否更新
-const UPLOAD_VERSION = '3.3.3-multi-endpoint';
+const UPLOAD_VERSION = '3.3.5-multi-endpoint';
+
+// 延迟函数
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export const uploadApi = {
   /**
@@ -39,8 +42,9 @@ export const uploadApi = {
    * - 多个备用端点，自动故障转移
    * - 直连上传，绕过代理服务器限制
    * - 支持 CORS，前端直连无问题
+   * - 每个端点失败后延迟重试，避免快速连续失败
    * 
-   * 版本: 3.3.3-multi-endpoint
+   * 版本: 3.3.5-multi-endpoint
    */
   async uploadToCrust(
     file: File,
@@ -68,9 +72,11 @@ export const uploadApi = {
         console.error(`[CrustShare] 端点 ${endpoint.name} 失败: ${errorMsg}`);
         errors.push(`${endpoint.name}: ${errorMsg}`);
         
-        // 如果不是最后一个端点，继续尝试下一个
+        // 如果不是最后一个端点，等待后继续尝试下一个
         if (i < CRUST_UPLOAD_ENDPOINTS.length - 1) {
-          console.log(`[CrustShare] 切换到下一个端点...`);
+          const waitTime = 2000; // 2秒延迟
+          console.log(`[CrustShare] 等待 ${waitTime/1000} 秒后切换到下一个端点...`);
+          await delay(waitTime);
         }
       }
     }
@@ -109,8 +115,8 @@ export const uploadApi = {
               const cid = response.Hash;
               const size = response.Size || file.size;
               
-              // 上传成功后，创建存储订单
-              this.createOrder(cid, size, token, orderUrl)
+              // 上传成功后，通过后端 API 创建存储订单（绕过 CORS）
+              this.createOrderViaBackend(cid, size)
                 .then((orderCreated) => {
                   resolve({
                     cid,
@@ -119,7 +125,8 @@ export const uploadApi = {
                     orderCreated,
                   });
                 })
-                .catch(() => {
+                .catch((err) => {
+                  console.warn("创建存储订单失败:", err);
                   // 订单创建失败不影响上传结果
                   resolve({
                     cid,
@@ -178,7 +185,34 @@ export const uploadApi = {
   },
 
   /**
-   * 创建存储订单
+   * 通过后端 API 创建存储订单（绕过 CORS 限制）
+   */
+  async createOrderViaBackend(cid: string, size: number): Promise<boolean> {
+    try {
+      console.log(`[CrustShare] 通过后端创建存储订单: CID=${cid}, Size=${size}`);
+      
+      const response = await secureFetch(`/api/create_order?cid=${cid}&size=${size}`, {
+        method: 'POST',
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        console.log(`[CrustShare] 存储订单创建成功`);
+        return true;
+      } else {
+        console.warn(`[CrustShare] 存储订单创建失败:`, data.error);
+        return false;
+      }
+    } catch (error) {
+      console.error("[CrustShare] 创建存储订单请求失败:", error);
+      return false;
+    }
+  },
+
+  /**
+   * 创建存储订单（直接调用 - 已弃用，使用 createOrderViaBackend）
+   * @deprecated 使用 createOrderViaBackend 替代
    */
   async createOrder(cid: string, size: number, token: string, orderUrl: string): Promise<boolean> {
     try {
@@ -201,31 +235,64 @@ export const uploadApi = {
     }
   },
 
+  /**
+   * 验证文件完整性
+   * 使用多个网关进行验证，提高成功率
+   */
   async verifyFile(cid: string): Promise<{
     verified: boolean;
     status: "ok" | "failed" | "pending";
     message?: string;
   }> {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), CONFIG.INTEGRITY_CHECK.HEAD_TIMEOUT);
+    // 验证网关列表
+    const verifyGateways = [
+      'https://ipfs.io/ipfs',
+      'https://cloudflare-ipfs.com/ipfs',
+      'https://dweb.link/ipfs',
+      'https://gateway.pinata.cloud/ipfs',
+      'https://cf-ipfs.com/ipfs',
+    ];
+    
+    // 增加超时时间：30秒
+    const timeout = 30000;
+    
+    for (const gateway of verifyGateways) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => {
+          controller.abort();
+        }, timeout);
 
-      const response = await fetch(`https://ipfs.io/ipfs/${cid}`, {
-        method: "HEAD",
-        signal: controller.signal,
-      });
+        const url = `${gateway}/${cid}`;
+        console.log(`[CrustShare] 尝试验证文件: ${url}`);
+        
+        const response = await fetch(url, {
+          method: "HEAD",
+          signal: controller.signal,
+        });
 
-      clearTimeout(timeoutId);
+        clearTimeout(timeoutId);
 
-      if (response.ok) {
-        return { verified: true, status: "ok" };
-      } else {
-        return { verified: false, status: "failed", message: "文件验证失败" };
+        if (response.ok) {
+          console.log(`[CrustShare] 文件验证成功: ${gateway}`);
+          return { verified: true, status: "ok", message: `通过 ${gateway} 验证成功` };
+        }
+      } catch (error) {
+        // 单个网关失败，继续尝试下一个
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        console.warn(`[CrustShare] 网关 ${gateway} 验证失败:`, errorMsg);
+        continue;
       }
-    } catch (error) {
-      console.warn("文件验证请求失败:", error);
-      return { verified: false, status: "pending", message: "验证超时" };
     }
+    
+    // 所有网关都失败，返回 pending 状态（而不是 failed）
+    // 因为文件可能刚上传，需要时间传播到各网关
+    console.warn(`[CrustShare] 所有验证网关都失败，返回 pending 状态`);
+    return { 
+      verified: false, 
+      status: "pending", 
+      message: "文件验证中，请稍后刷新页面查看状态" 
+    };
   },
 };
 
