@@ -116,25 +116,18 @@ export const uploadApi = {
               const size = response.Size || file.size;
               
               // 上传成功后，通过后端 API 创建存储订单（绕过 CORS）
-              this.createOrderViaBackend(cid, size)
-                .then((orderCreated) => {
-                  resolve({
-                    cid,
-                    size,
-                    hash: response.Hash,
-                    orderCreated,
-                  });
-                })
-                .catch((err) => {
-                  console.warn("创建存储订单失败:", err);
-                  // 订单创建失败不影响上传结果
-                  resolve({
-                    cid,
-                    size,
-                    hash: response.Hash,
-                    orderCreated: false,
-                  });
-                });
+              // 不等待订单创建完成，直接返回成功
+              this.createOrderViaBackend(cid, size).catch(err => {
+                console.warn("[CrustShare] 后台创建存储订单出错:", err);
+              });
+              
+              // 立即返回成功，不阻塞
+              resolve({
+                cid,
+                size,
+                hash: response.Hash,
+                orderCreated: false, // 订单在后台创建
+              });
             } else if (response.error) {
               reject(new Error(response.error));
             } else if (response.Message) {
@@ -186,10 +179,11 @@ export const uploadApi = {
 
   /**
    * 通过后端 API 创建存储订单（绕过 CORS 限制）
+   * 在后台异步执行，不阻塞主流程
    */
   async createOrderViaBackend(cid: string, size: number): Promise<boolean> {
     try {
-      console.log(`[CrustShare] 通过后端创建存储订单: CID=${cid}, Size=${size}`);
+      console.log(`[CrustShare] 后台创建存储订单: CID=${cid}, Size=${size}`);
       
       const response = await secureFetch(`/api/create_order?cid=${cid}&size=${size}`, {
         method: 'POST',
@@ -197,11 +191,11 @@ export const uploadApi = {
       
       const data = await response.json();
       
-      if (data.success) {
+      if (data.success && data.data?.orderCreated) {
         console.log(`[CrustShare] 存储订单创建成功`);
         return true;
       } else {
-        console.warn(`[CrustShare] 存储订单创建失败:`, data.error);
+        console.log(`[CrustShare] 存储订单: ${data.data?.reason || '已跳过'}`);
         return false;
       }
     } catch (error) {
@@ -237,24 +231,24 @@ export const uploadApi = {
 
   /**
    * 验证文件完整性
-   * 使用多个网关进行验证，提高成功率
+   * 使用多个网关进行验证，优先使用国内可访问的网关
    */
   async verifyFile(cid: string): Promise<{
     verified: boolean;
     status: "ok" | "failed" | "pending";
     message?: string;
   }> {
-    // 验证网关列表
+    // 验证网关列表 - 优先使用国内可访问的网关
     const verifyGateways = [
-      'https://ipfs.io/ipfs',
-      'https://cloudflare-ipfs.com/ipfs',
-      'https://dweb.link/ipfs',
-      'https://gateway.pinata.cloud/ipfs',
-      'https://cf-ipfs.com/ipfs',
+      'https://cf-ipfs.com/ipfs',           // Cloudflare CN
+      'https://4everland.io/ipfs',          // 4EVERLAND
+      'https://cdn.ipfsscan.io/ipfs',       // IPFSScan CN
+      'https://gateway.lighthouse.storage/ipfs', // Lighthouse
+      'https://crustwebsites.net/ipfs',     // Crust
     ];
     
-    // 增加超时时间：30秒
-    const timeout = 30000;
+    // 每个网关超时时间：10秒
+    const timeout = 10000;
     
     for (const gateway of verifyGateways) {
       try {
@@ -275,7 +269,7 @@ export const uploadApi = {
 
         if (response.ok) {
           console.log(`[CrustShare] 文件验证成功: ${gateway}`);
-          return { verified: true, status: "ok", message: `通过 ${gateway} 验证成功` };
+          return { verified: true, status: "ok", message: `验证成功` };
         }
       } catch (error) {
         // 单个网关失败，继续尝试下一个
@@ -285,13 +279,13 @@ export const uploadApi = {
       }
     }
     
-    // 所有网关都失败，返回 pending 状态（而不是 failed）
-    // 因为文件可能刚上传，需要时间传播到各网关
+    // 所有网关都失败，返回 pending 状态
+    // 文件刚上传可能需要时间传播到各网关
     console.warn(`[CrustShare] 所有验证网关都失败，返回 pending 状态`);
     return { 
       verified: false, 
       status: "pending", 
-      message: "文件验证中，请稍后刷新页面查看状态" 
+      message: "文件验证中，请稍后刷新查看" 
     };
   },
 };

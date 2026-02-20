@@ -26,23 +26,6 @@ export async function onRequestOptions(): Promise<Response> {
 export async function onRequestPost(context: Context): Promise<Response> {
   const { request, env } = context;
 
-  // 验证用户认证
-  const authHeader = request.headers.get("x-auth-token");
-  if (!authHeader || authHeader !== env.ADMIN_PASSWORD) {
-    return new Response(
-      JSON.stringify({ success: false, error: "未授权" } as ApiResponse),
-      { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
-    );
-  }
-
-  // 检查 CRUST_ACCESS_TOKEN 是否已配置
-  if (!env.CRUST_ACCESS_TOKEN) {
-    return new Response(
-      JSON.stringify({ success: false, error: "CRUST_ACCESS_TOKEN未配置" } as ApiResponse),
-      { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
-    );
-  }
-
   // 解析请求参数
   const url = new URL(request.url);
   const cid = url.searchParams.get("cid");
@@ -60,6 +43,34 @@ export async function onRequestPost(context: Context): Promise<Response> {
     return new Response(
       JSON.stringify({ success: false, error: "size 参数必须是数字" } as ApiResponse),
       { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+    );
+  }
+
+  // 验证用户认证
+  const authHeader = request.headers.get("x-auth-token");
+  const adminPassword = env.ADMIN_PASSWORD;
+  
+  if (!authHeader || authHeader !== adminPassword) {
+    return new Response(
+      JSON.stringify({ success: false, error: "未授权" } as ApiResponse),
+      { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
+    );
+  }
+
+  // 检查 CRUST_ACCESS_TOKEN 是否已配置
+  const crustToken = env.CRUST_ACCESS_TOKEN;
+  if (!crustToken) {
+    // 返回成功但标记订单未创建（crustfiles.io 免费模式可能不需要订单）
+    console.log("[create_order] CRUST_ACCESS_TOKEN 未配置，跳过订单创建");
+    return new Response(
+      JSON.stringify({ 
+        success: true, 
+        data: { 
+          orderCreated: false, 
+          reason: "CRUST_ACCESS_TOKEN 未配置，使用免费模式存储"
+        } 
+      } as ApiResponse),
+      { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
   }
 
@@ -90,10 +101,13 @@ export async function onRequestPost(context: Context): Promise<Response> {
     try {
       console.log(`[create_order] 尝试端点 ${endpoint.name}: ${endpoint.url}`);
       
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15秒超时
+      
       const response = await fetch(endpoint.url, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${env.CRUST_ACCESS_TOKEN}`,
+          'Authorization': `Bearer ${crustToken}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -101,7 +115,10 @@ export async function onRequestPost(context: Context): Promise<Response> {
           size,
           months: 1200, // 永久存储
         }),
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       if (response.ok) {
         const result = await response.json();
@@ -129,14 +146,17 @@ export async function onRequestPost(context: Context): Promise<Response> {
     }
   }
 
-  // 所有端点都失败
-  console.error(`[create_order] 所有端点都失败:`, errors);
+  // 所有端点都失败，但返回成功（订单创建是可选的，不影响文件存储）
+  console.warn(`[create_order] 所有端点都失败，但文件已上传成功:`, errors);
   return new Response(
     JSON.stringify({ 
-      success: false, 
-      error: "创建存储订单失败",
-      details: errors.join('; ')
+      success: true, 
+      data: { 
+        orderCreated: false, 
+        reason: "订单创建失败，但文件已成功上传到 Crust 网络",
+        details: errors.join('; ')
+      } 
     } as ApiResponse),
-    { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
+    { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
   );
 }
