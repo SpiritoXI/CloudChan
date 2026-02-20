@@ -99,6 +99,10 @@ pnpm dev
 # 从 https://crustfiles.io 获取 Developer Profile Access Token
 CRUST_ACCESS_TOKEN=your_access_token_here
 
+# 管理员密码（必需）
+# 用于登录后台管理文件，至少 8 个字符
+ADMIN_PASSWORD=your_admin_password
+
 # Redis 配置（可选，用于数据持久化）
 UPSTASH_REDIS_REST_URL=your_redis_url
 UPSTASH_REDIS_REST_TOKEN=your_redis_token
@@ -112,6 +116,21 @@ UPSTASH_REDIS_REST_TOKEN=your_redis_token
 4. 复制 Access Token
 
 > ⚠️ **安全提示**：Access Token 包含您的私钥，请妥善保管，不要泄露或提交到公开仓库！
+
+## 设置管理员密码
+
+管理员密码用于登录后台管理文件，是必需的环境变量。
+
+**要求：**
+- 至少 8 个字符
+- 建议包含大小写字母、数字和特殊符号
+
+**示例：**
+```
+ADMIN_PASSWORD=MySecureP@ss123
+```
+
+> ⚠️ **安全提示**：请勿使用简单密码如 "admin123"，建议使用密码管理器生成随机密码！
 
 ---
 

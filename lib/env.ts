@@ -4,7 +4,7 @@ const envSchema = z.object({
   UPSTASH_URL: z.string().url().optional(),
   UPSTASH_TOKEN: z.string().min(1).optional(),
   ADMIN_PASSWORD: z.string().min(8).optional(),
-  CRUST_TOKEN: z.string().min(1).optional(),
+  CRUST_ACCESS_TOKEN: z.string().min(1).optional(),
   NEXT_PUBLIC_APP_VERSION: z.string().optional(),
   NEXT_PUBLIC_BUILD_TIME: z.string().optional(),
 });
@@ -20,7 +20,7 @@ function validateEnv(): Env {
       UPSTASH_URL: undefined,
       UPSTASH_TOKEN: undefined,
       ADMIN_PASSWORD: undefined,
-      CRUST_TOKEN: undefined,
+      CRUST_ACCESS_TOKEN: undefined,
       NEXT_PUBLIC_APP_VERSION: process.env.NEXT_PUBLIC_APP_VERSION,
       NEXT_PUBLIC_BUILD_TIME: process.env.NEXT_PUBLIC_BUILD_TIME,
     };
@@ -30,7 +30,7 @@ function validateEnv(): Env {
     UPSTASH_URL: isServer ? process.env.UPSTASH_URL : undefined,
     UPSTASH_TOKEN: isServer ? process.env.UPSTASH_TOKEN : undefined,
     ADMIN_PASSWORD: isServer ? process.env.ADMIN_PASSWORD : undefined,
-    CRUST_TOKEN: isServer ? process.env.CRUST_TOKEN : undefined,
+    CRUST_ACCESS_TOKEN: isServer ? process.env.CRUST_ACCESS_TOKEN : undefined,
     NEXT_PUBLIC_APP_VERSION: process.env.NEXT_PUBLIC_APP_VERSION,
     NEXT_PUBLIC_BUILD_TIME: process.env.NEXT_PUBLIC_BUILD_TIME,
   });
@@ -43,7 +43,7 @@ function validateEnv(): Env {
       UPSTASH_URL: undefined,
       UPSTASH_TOKEN: undefined,
       ADMIN_PASSWORD: undefined,
-      CRUST_TOKEN: undefined,
+      CRUST_ACCESS_TOKEN: undefined,
       NEXT_PUBLIC_APP_VERSION: process.env.NEXT_PUBLIC_APP_VERSION,
       NEXT_PUBLIC_BUILD_TIME: process.env.NEXT_PUBLIC_BUILD_TIME,
     };

@@ -100,6 +100,10 @@ Create a `.env.local` file with the following variables:
 # Get Developer Profile Access Token from https://crustfiles.io
 CRUST_ACCESS_TOKEN=your_access_token_here
 
+# Admin Password (Required)
+# Used for admin login, at least 8 characters
+ADMIN_PASSWORD=your_admin_password
+
 # Redis Configuration (Optional, for data persistence)
 UPSTASH_REDIS_REST_URL=your_redis_url
 UPSTASH_REDIS_REST_TOKEN=your_redis_token
@@ -113,6 +117,21 @@ UPSTASH_REDIS_REST_TOKEN=your_redis_token
 4. Copy Access Token
 
 > ⚠️ **Security Warning**: Access Token contains your private key. Keep it secure and never commit it to public repositories!
+
+### Setting Admin Password
+
+Admin password is required for logging into the admin panel.
+
+**Requirements:**
+- At least 8 characters
+- Recommended: mix of uppercase, lowercase, numbers, and special characters
+
+**Example:**
+```
+ADMIN_PASSWORD=MySecureP@ss123
+```
+
+> ⚠️ **Security Warning**: Do not use simple passwords like "admin123". Use a password manager to generate a random password!
 
 ---
 

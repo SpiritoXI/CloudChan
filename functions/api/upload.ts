@@ -21,10 +21,10 @@ export async function onRequestPost(context: Context): Promise<Response> {
     );
   }
 
-  const crustToken = env.CRUST_TOKEN;
+  const crustToken = env.CRUST_ACCESS_TOKEN;
   if (!crustToken) {
     return new Response(
-      JSON.stringify({ success: false, error: "CRUST_TOKEN未配置" } as ApiResponse),
+      JSON.stringify({ success: false, error: "CRUST_ACCESS_TOKEN未配置" } as ApiResponse),
       { status: 500, headers: { "Content-Type": "application/json" } }
     );
   }

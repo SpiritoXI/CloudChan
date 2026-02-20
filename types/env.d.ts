@@ -12,7 +12,7 @@ export interface Env {
   ADMIN_PASSWORD: string;
 
   // Crust Network Token
-  CRUST_TOKEN: string;
+  CRUST_ACCESS_TOKEN: string;
 }
 
 export interface Context {

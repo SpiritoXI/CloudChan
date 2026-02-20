@@ -57,10 +57,37 @@ pnpm dev
 # 必需：从 https://crustfiles.io 获取
 CRUST_ACCESS_TOKEN=your_access_token_here
 
+# 必需：管理员登录密码（至少8位）
+ADMIN_PASSWORD=your_admin_password
+
 # 可选：用于数据持久化
 UPSTASH_REDIS_REST_URL=your_redis_url
 UPSTASH_REDIS_REST_TOKEN=your_redis_token
 ```
+
+### 获取 Access Token
+
+1. 访问 [crustfiles.io](https://crustfiles.io)
+2. 连接钱包（MetaMask、Coinbase Wallet 等）
+3. 创建 Developer Profile
+4. 复制 Access Token
+
+> ⚠️ **安全警告**：Access Token 包含私钥，请妥善保管，不要提交到公开仓库！
+
+### 设置管理员密码
+
+管理员密码用于登录管理后台。
+
+**要求：**
+- 至少 8 个字符
+- 建议使用大小写字母、数字、特殊字符的组合
+
+**示例：**
+```
+ADMIN_PASSWORD=MySecureP@ss123
+```
+
+> ⚠️ **安全警告**：不要使用简单密码（如 "admin123"），建议使用密码管理器生成随机密码！
 
 ---
 

@@ -64,6 +64,17 @@
 
 > 💡 **提示**：如果不配置 Redis，应用会使用内存存储，重启后数据会丢失。
 
+### 4. 设置管理员密码（必需）
+
+管理员密码用于登录后台管理文件，是必需的环境变量。
+
+**步骤：**
+
+1. 选择一个强密码（至少 8 个字符，建议包含大小写字母、数字和特殊符号）
+2. 将此密码保存好，部署时需要配置为 `ADMIN_PASSWORD` 环境变量
+
+> ⚠️ **安全提示**：请勿使用简单密码如 "admin123"，建议使用密码管理器生成随机密码。
+
 ---
 
 ## 方式一：Cloudflare Pages 部署（推荐）
@@ -134,11 +145,16 @@ Cloudflare Pages 提供免费的静态网站托管，配合 Cloudflare Functions
    - Value: 您之前复制的 Access Token
    - 选择 **"Encrypt"** 加密存储
 
-   **变量 2（可选）：**
+   **变量 2（必需）：**
+   - Variable name: `ADMIN_PASSWORD`
+   - Value: 您设置的管理员登录密码
+   - 选择 **"Encrypt"** 加密存储
+
+   **变量 3（可选）：**
    - Variable name: `UPSTASH_REDIS_REST_URL`
    - Value: 您的 Upstash Redis URL
 
-   **变量 3（可选）：**
+   **变量 4（可选）：**
    - Variable name: `UPSTASH_REDIS_REST_TOKEN`
    - Value: 您的 Upstash Redis Token
 
@@ -196,6 +212,7 @@ Vercel 是 Next.js 的官方托管平台，部署体验极佳。
 5. 在 **"Configure Project"** 页面：
    - 展开 **"Environment Variables"**
    - 添加 `CRUST_ACCESS_TOKEN` 变量
+   - 添加 `ADMIN_PASSWORD` 变量
    - 点击 **"Deploy"**
 
 6. 等待部署完成（约 2-3 分钟）
@@ -222,7 +239,7 @@ cd CrustShare
 pnpm install
 
 # 第五步：配置环境变量
-# 创建 .env.local 文件并添加 CRUST_ACCESS_TOKEN
+# 创建 .env.local 文件并添加 CRUST_ACCESS_TOKEN 和 ADMIN_PASSWORD
 
 # 第六步：部署到预览环境
 vercel
@@ -245,6 +262,10 @@ vercel --prod
 4. 添加变量：
    - Name: `CRUST_ACCESS_TOKEN`
    - Value: 您的 Access Token
+   - Environment: 选择 Production, Preview, Development
+   
+   - Name: `ADMIN_PASSWORD`
+   - Value: 您的管理员密码
    - Environment: 选择 Production, Preview, Development
 
 5. 点击 **"Save"**
@@ -391,6 +412,7 @@ docker run -d \
   --name crustshare \
   -p 3000:3000 \
   -e CRUST_ACCESS_TOKEN=your_token_here \
+  -e ADMIN_PASSWORD=your_admin_password \
   --restart unless-stopped \
   crustshare:latest
 
@@ -490,6 +512,7 @@ nano .env.local
 
 ```env
 CRUST_ACCESS_TOKEN=your_access_token_here
+ADMIN_PASSWORD=your_admin_password
 UPSTASH_REDIS_REST_URL=https://your-redis.upstash.io
 UPSTASH_REDIS_REST_TOKEN=your_redis_token
 ```
@@ -618,6 +641,7 @@ pm2 restart crustshare
 | 变量名 | 说明 | 示例值 |
 |--------|------|--------|
 | `CRUST_ACCESS_TOKEN` | Crust 访问令牌，用于上传文件到 IPFS | `eyJhbGciOiJIUzI1NiIsInR5cCI6...` |
+| `ADMIN_PASSWORD` | 管理员登录密码，至少 8 个字符 | `MySecureP@ss123` |
 
 ### 可选变量
 
@@ -640,6 +664,12 @@ pm2 restart crustshare
 │  ├── 上传文件到 IPFS                                        │
 │  ├── 创建存储订单                                           │
 │  └── 访问 Crust 网络资源                                    │
+│                                                             │
+│  ADMIN_PASSWORD (必需)                                      │
+│  │                                                          │
+│  ├── 管理员登录验证                                         │
+│  ├── 保护后台管理功能                                       │
+│  └── 敏感操作授权                                           │
 │                                                             │
 │  UPSTASH_REDIS_REST_URL / TOKEN (可选)                      │
 │  │                                                          │

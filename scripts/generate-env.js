@@ -36,7 +36,7 @@ NEXT_PUBLIC_BUILD_TIME=${buildTime}
 # ADMIN_PASSWORD=your-admin-password
 
 # Crust Network Configuration (optional)
-# CRUST_TOKEN=your-crust-token
+# CRUST_ACCESS_TOKEN=your-crust-access-token
 `;
 }
 
