@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, memo, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Cloud, Copy, Check, Download, Folder, Trash2, ChevronDown, Globe, Pencil, Share2, FileIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -48,11 +49,29 @@ const FileListComponent = function FileList({
   gateways = [],
 }: FileListProps) {
   const [openGatewayMenuId, setOpenGatewayMenuId] = useState<string | number | null>(null);
+  const [menuPosition, setMenuPosition] = useState({ top: 0, right: 0 });
   const menuRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLDivElement>(null);
 
   const handleDownloadWithGateway = (file: FileRecord, gateway: Gateway) => {
     onDownloadWithGateway(file.cid, file.name, gateway);
     setOpenGatewayMenuId(null);
+  };
+
+  const handleToggleMenu = (fileId: string | number) => {
+    if (openGatewayMenuId === fileId) {
+      setOpenGatewayMenuId(null);
+    } else {
+      // 计算菜单位置
+      if (triggerRef.current) {
+        const rect = triggerRef.current.getBoundingClientRect();
+        setMenuPosition({
+          top: rect.bottom + window.scrollY,
+          right: window.innerWidth - rect.right,
+        });
+      }
+      setOpenGatewayMenuId(fileId);
+    }
   };
 
   const allSelected = files.length > 0 && files.every((f) => selectedFiles.includes(String(f.id)));
@@ -206,7 +225,7 @@ const FileListComponent = function FileList({
                             )}
                           </AnimatePresence>
                         </Button>
-                        <div className="relative" ref={openGatewayMenuId === file.id ? menuRef : null}>
+                        <div ref={triggerRef}>
                           <div className="flex items-center">
                             <Button
                               variant="ghost"
@@ -222,65 +241,71 @@ const FileListComponent = function FileList({
                               variant="ghost"
                               size="icon"
                               className="h-8 w-6 rounded-l-none px-1 hover:bg-cloudchan-blue/10 hover:text-cloudchan-blue transition-colors"
-                              onClick={() => setOpenGatewayMenuId(openGatewayMenuId === file.id ? null : file.id)}
+                              onClick={() => handleToggleMenu(file.id)}
                               title="选择网关下载"
                             >
                               <ChevronDown className="h-3 w-3" />
                             </Button>
                           </div>
-                          <AnimatePresence>
-                            {openGatewayMenuId === file.id && (
-                              <motion.div
-                                initial={{ opacity: 0, y: -10, scale: 0.95 }}
-                                animate={{ opacity: 1, y: 0, scale: 1 }}
-                                exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                                transition={{ duration: 0.15 }}
-                                className="absolute right-0 top-full mt-1 w-56 bg-white/95 backdrop-blur-md rounded-xl shadow-xl border border-white/30 z-50 py-1 overflow-hidden"
-                              >
-                                <div className="px-3 py-2 border-b border-white/30 bg-gradient-to-r from-cloudchan-purple/5 to-cloudchan-blue/5">
-                                  <p className="text-xs font-medium text-muted-foreground flex items-center">
-                                    <Globe className="h-3 w-3 mr-1" />
-                                    选择网关下载
-                                  </p>
-                                </div>
-                                {gateways.filter(g => g.available).length === 0 ? (
-                                  <div className="px-3 py-2 text-xs text-muted-foreground text-center">
-                                    暂无可用网关
-                                  </div>
-                                ) : (
-                                  gateways
-                                    .filter(g => g.available)
-                                    .sort((a, b) => (a.latency || Infinity) - (b.latency || Infinity))
-                                    .map(gateway => (
-                                      <button
-                                        key={gateway.name}
-                                        onClick={() => handleDownloadWithGateway(file, gateway)}
-                                        className="w-full px-3 py-2 text-left hover:bg-cloudchan-purple/5 transition-colors flex items-center justify-between"
-                                      >
-                                        <div className="flex items-center">
-                                          <span className="text-sm mr-2">{gateway.icon}</span>
-                                          <span className="text-sm">{gateway.name}</span>
-                                        </div>
-                                        <span className="text-xs text-green-600 bg-green-50 px-1.5 py-0.5 rounded">{gateway.latency}ms</span>
-                                      </button>
-                                    ))
-                                )}
-                                <div className="border-t border-white/30 mt-1 pt-1">
-                                  <button
-                                    onClick={() => {
-                                      onDownloadMenu(file);
-                                      setOpenGatewayMenuId(null);
-                                    }}
-                                    className="w-full px-3 py-2 text-left hover:bg-cloudchan-purple/5 transition-colors text-sm text-muted-foreground flex items-center"
-                                  >
-                                    <Globe className="h-4 w-4 mr-2" />
-                                    更多网关选项...
-                                  </button>
-                                </div>
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
                         </div>
+                        {openGatewayMenuId === file.id && typeof window !== 'undefined' && createPortal(
+                          <motion.div
+                            initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                            transition={{ duration: 0.15 }}
+                            className="fixed bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 z-[100] py-1 overflow-hidden w-56"
+                            style={{
+                              top: menuPosition.top,
+                              right: menuPosition.right,
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-700 bg-gradient-to-r from-cloudchan-purple/5 to-cloudchan-blue/5">
+                              <p className="text-xs font-medium text-muted-foreground flex items-center">
+                                <Globe className="h-3 w-3 mr-1" />
+                                选择网关下载
+                              </p>
+                            </div>
+                            {gateways.filter(g => g.available).length === 0 ? (
+                              <div className="px-3 py-4 text-sm text-muted-foreground text-center">
+                                暂无可用网关
+                              </div>
+                            ) : (
+                              <div className="max-h-48 overflow-y-auto">
+                                {gateways
+                                  .filter(g => g.available)
+                                  .sort((a, b) => (a.latency || Infinity) - (b.latency || Infinity))
+                                  .map(gateway => (
+                                    <button
+                                      key={gateway.name}
+                                      onClick={() => handleDownloadWithGateway(file, gateway)}
+                                      className="w-full px-3 py-2 text-left hover:bg-cloudchan-purple/5 transition-colors flex items-center justify-between"
+                                    >
+                                      <div className="flex items-center">
+                                        <span className="text-sm mr-2">{gateway.icon}</span>
+                                        <span className="text-sm">{gateway.name}</span>
+                                      </div>
+                                      <span className="text-xs text-green-600 bg-green-50 dark:bg-green-900/30 px-1.5 py-0.5 rounded">{gateway.latency}ms</span>
+                                    </button>
+                                  ))}
+                              </div>
+                            )}
+                            <div className="border-t border-slate-200 dark:border-slate-700 mt-1 pt-1">
+                              <button
+                                onClick={() => {
+                                  onDownloadMenu(file);
+                                  setOpenGatewayMenuId(null);
+                                }}
+                                className="w-full px-3 py-2 text-left hover:bg-cloudchan-purple/5 transition-colors text-sm text-muted-foreground flex items-center"
+                              >
+                                <Globe className="h-4 w-4 mr-2" />
+                                更多网关选项...
+                              </button>
+                            </div>
+                          </motion.div>,
+                          document.body
+                        )}
                         <Button
                           variant="ghost"
                           size="icon"
