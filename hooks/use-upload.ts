@@ -93,6 +93,13 @@ export function useUpload(options: UseUploadOptions): UploadState & UploadOperat
       setAbortController(controller);
 
       try {
+        // 先获取上传 token
+        const token = await api.getToken();
+        if (!token) {
+          showToast("获取上传令牌失败，请检查配置", "error");
+          return;
+        }
+
         for (const file of validFiles) {
           if (controller.signal.aborted) break;
 
@@ -100,7 +107,7 @@ export function useUpload(options: UseUploadOptions): UploadState & UploadOperat
           setUploadProgress(0);
 
           try {
-            const result = await uploadApi.uploadToCrust(file, '', (progress) => {
+            const result = await uploadApi.uploadToCrust(file, token, (progress) => {
               setUploadProgress(progress);
             });
 
