@@ -2,7 +2,25 @@ import { CONFIG, API } from "../config";
 import { secureFetch } from "./base";
 
 // ============================================
-// Crust Network 上传端点配置
+// Crust Network 文件固定验证说明
+// ============================================
+// 
+// 如何保证文件已经被固定？
+// 
+// 1. 上传时自动固定：
+//    - URL 中包含 pin=true 参数
+//    - Crust 节点会在收到文件后自动固定
+// 
+// 2. 验证方式：
+//    - 通过 IPFS 网关访问文件（能访问说明已被固定）
+//    - 查询 Crust 链上存储状态
+//    - 调用 verifyPinStatus() 获取详细状态
+// 
+// 3. 存储订单（可选）：
+//    - 使用 CRUST_ACCESS_TOKEN 创建订单
+//    - 订单会为文件提供更长时间的存储保障
+//    - crustfiles.io 免费模式无需订单也永久存储
+//
 // ============================================
 // 多个备用端点，自动故障转移
 const CRUST_UPLOAD_ENDPOINTS = [
@@ -287,6 +305,55 @@ export const uploadApi = {
       status: "pending", 
       message: "文件验证中，请稍后刷新查看" 
     };
+  },
+
+  /**
+   * 验证文件固定状态（通过后端 API）
+   * 
+   * 返回详细的固定状态信息：
+   * - pinned: 文件是否已被固定
+   * - availableOnGateways: 文件可用的网关列表
+   * - crustOrderExists: 是否有 Crust 链上存储订单
+   * 
+   * 使用方法：
+   * ```typescript
+   * const status = await uploadApi.verifyPinStatus(cid);
+   * if (status.pinned) {
+   *   console.log("文件已被固定，可用网关:", status.availableOnGateways);
+   * }
+   * ```
+   */
+  async verifyPinStatus(cid: string): Promise<{
+    pinned: boolean;
+    availableOnGateways: string[];
+    crustOrderExists: boolean;
+    lastChecked: string;
+  }> {
+    try {
+      console.log(`[CrustShare] 验证文件固定状态: CID=${cid}`);
+      
+      const response = await secureFetch(`/api/verify_pin?cid=${cid}`);
+      const data = await response.json();
+      
+      if (data.success && data.data) {
+        return data.data;
+      }
+      
+      return {
+        pinned: false,
+        availableOnGateways: [],
+        crustOrderExists: false,
+        lastChecked: new Date().toISOString(),
+      };
+    } catch (error) {
+      console.error("[CrustShare] 验证固定状态失败:", error);
+      return {
+        pinned: false,
+        availableOnGateways: [],
+        crustOrderExists: false,
+        lastChecked: new Date().toISOString(),
+      };
+    }
   },
 };
 

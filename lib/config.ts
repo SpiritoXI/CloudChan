@@ -24,6 +24,7 @@ export const API = {
   SHARE: '/api/share',
   VERIFY_SHARE_PASSWORD: '/api/verify-share-password',
   CREATE_ORDER: '/api/create_order',
+  VERIFY_PIN: '/api/verify_pin',
 } as const;
 
 /**
