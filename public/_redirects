@@ -1,0 +1,2 @@
+# Cloudflare Pages 路由重写规则
+# /share/{cid} 由 functions/share/[[cid]].ts 动态处理
