@@ -30,7 +30,11 @@ export const API = {
  */
 export const CRUST = {
   UPLOAD_API: 'https://gw.crustfiles.app/api/v0/add?pin=true',
+  // 存储订单 API - 这是实现永久存储的关键！
+  ORDER_API: 'https://gw.crustfiles.app/crust/api/v1/files',
   TEST_CID: 'bafkreigh2akiscaildcqabsyg3dfr6chu3fgpregiymsck7e7aqa4s52zy',
+  // 默认存储月数
+  DEFAULT_STORAGE_MONTHS: 12,
 } as const;
 
 /**

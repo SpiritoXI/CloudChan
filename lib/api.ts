@@ -408,12 +408,64 @@ export const api = {
 };
 
 export const uploadApi = {
+  /**
+   * 创建存储订单 - 这是实现永久存储的关键步骤！
+   * 
+   * 重要说明：
+   * - Access Token 包含私钥，crustfiles.io 后端用此签名链上交易
+   * - 存储订单会让多个 Crust 节点持久保存你的文件
+   * - 需要账户有足够的 CRU 余额（高级用户通常有）
+   */
+  async createStorageOrder(
+    cid: string,
+    size: number,
+    token: string,
+    months: number = CONFIG.CRUST.DEFAULT_STORAGE_MONTHS
+  ): Promise<{ success: boolean; message?: string }> {
+    try {
+      const orderUrl = `${CONFIG.CRUST.ORDER_API}/${cid}/order`;
+      
+      console.log(`[Crust] 创建存储订单: ${cid}`);
+      console.log(`[Crust] 文件大小: ${size} bytes, 存储时长: ${months} 个月`);
+      
+      const response = await fetch(orderUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          cid,
+          size,
+          months,
+        }),
+      });
+
+      if (response.ok) {
+        console.log(`[Crust] 存储订单创建成功！文件将被永久存储。`);
+        return { success: true, message: '存储订单创建成功' };
+      } else {
+        const errorText = await response.text().catch(() => '');
+        console.warn(`[Crust] 存储订单创建失败: ${response.status} - ${errorText}`);
+        return { 
+          success: false, 
+          message: `存储订单创建失败: ${response.status}` 
+        };
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '未知错误';
+      console.error(`[Crust] 存储订单创建异常:`, message);
+      return { success: false, message };
+    }
+  },
+
   async uploadToCrust(
     file: File,
     token: string,
     onProgress: (progress: number) => void,
-    retryCount = 3
-  ): Promise<{ cid: string; size: number; hash?: string }> {
+    retryCount = 3,
+    createOrder: boolean = true  // 是否创建存储订单，默认开启
+  ): Promise<{ cid: string; size: number; hash?: string; orderCreated?: boolean }> {
     const formData = new FormData();
     formData.append("file", file);
 
@@ -488,7 +540,26 @@ export const uploadApi = {
         onProgress(0);
         
         const result = await attemptUpload(attempt);
-        return result;
+        
+        // ⭐ 关键步骤：上传成功后创建存储订单
+        let orderCreated = false;
+        if (createOrder) {
+          const orderResult = await this.createStorageOrder(
+            result.cid,
+            result.size,
+            token
+          );
+          orderCreated = orderResult.success;
+          
+          if (!orderCreated) {
+            console.warn(`[Crust] 文件已上传但存储订单未创建，文件可能无法永久保存`);
+          }
+        }
+        
+        return {
+          ...result,
+          orderCreated,
+        };
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
         
